@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 interface KarlMascotProps {
   size?: number;
@@ -22,10 +22,12 @@ export function KarlMascot({ size = 46, color = '#c4f542', smug = false }: KarlM
           height: size,
           backgroundColor: color,
           borderRadius: size * 0.44,
-          shadowColor: color,
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.5,
-          shadowRadius: 12,
+          ...(Platform.OS !== 'web' && {
+            shadowColor: color,
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.5,
+            shadowRadius: 12,
+          }),
           elevation: 8,
         },
       ]}
