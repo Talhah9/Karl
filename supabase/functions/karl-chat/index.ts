@@ -11,7 +11,7 @@ const FREE_LIMIT = 20;
 const TOOLS: Anthropic.Tool[] = [
   {
     name: "ajouter_transaction",
-    description: "Propose d'enregistrer une transaction financière UNIQUEMENT quand l'utilisateur a fourni un montant explicite. Le système demandera confirmation avant insertion réelle.",
+    description: "Propose d'enregistrer une transaction financière UNIQUEMENT quand l'utilisateur a fourni un montant explicite. Le système demandera confirmation avant insertion réelle. Ne jamais inclure de texte disant que la transaction est enregistrée — l'utilisateur doit d'abord confirmer via l'interface.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -21,6 +21,32 @@ const TOOLS: Anthropic.Tool[] = [
         description: { type: "string", description: "Description courte optionnelle" },
       },
       required: ["montant", "categorie", "type"],
+    },
+  },
+  {
+    name: "modifier_transaction",
+    description: "Propose de modifier une transaction existante. Appelle lister_transactions_recentes d'abord pour obtenir l'ID. Ne jamais indiquer que la modification est faite — l'utilisateur doit confirmer via l'interface.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string", description: "ID de la transaction à modifier" },
+        nouveau_montant: { type: "number", description: "Nouveau montant en euros (optionnel)" },
+        nouvelle_categorie: { type: "string", description: "Nouvelle catégorie (optionnel)" },
+        nouveau_type: { type: "string", enum: ["depense", "revenu"], description: "Nouveau type (optionnel)" },
+        nouvelle_description: { type: "string", description: "Nouvelle description (optionnel)" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "supprimer_transaction",
+    description: "Propose de supprimer une transaction existante. Appelle lister_transactions_recentes d'abord pour obtenir l'ID. Ne jamais indiquer que la suppression est faite — l'utilisateur doit confirmer via l'interface.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string", description: "ID de la transaction à supprimer" },
+      },
+      required: ["id"],
     },
   },
   {
@@ -41,7 +67,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "lister_transactions_recentes",
-    description: "Retourne les dernières transactions de l'utilisateur.",
+    description: "Retourne les dernières transactions de l'utilisateur avec leurs IDs.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -57,6 +83,8 @@ Règles impératives :
 - N'invente JAMAIS de chiffres. Utilise toujours les tools pour obtenir des données réelles.
 - Appelle ajouter_transaction UNIQUEMENT pour une transaction nouvelle dans le message actuel de l'utilisateur — jamais pour une transaction déjà présente dans l'historique.
 - N'appelle JAMAIS ajouter_transaction si l'utilisateur n'a pas fourni de montant explicite (chiffre) dans la conversation. Si le montant est absent ou ambigu, pose la question en texte pur et attends la réponse — ne devine et n'invente jamais un prix.
+- Ne dis JAMAIS "c'est noté", "enregistré", "ajouté", "supprimé", "modifié" ou toute formule indiquant qu'une opération est faite avant que l'utilisateur ait cliqué sur le bouton de confirmation dans l'app. L'opération n'est exécutée QUE sur confirmation explicite.
+- Quand tu appelles ajouter_transaction, modifier_transaction ou supprimer_transaction, n'inclus PAS de texte confirmant que l'opération est déjà faite — l'app affiche d'abord une carte de confirmation.
 - Sois concis. Réponds comme dans un SMS, pas un email. Maximum 3-4 phrases.
 - Tu peux utiliser des emojis avec parcimonie.
 - Si l'historique contient un message utilisateur "✅ Confirmé" suivi de ton accusé de réception (ex : "c'est noté", "enregistré"), la transaction est DÉFINITIVEMENT clôturée. Ne la ré-enregistre jamais, ne redemande jamais de confirmation. Un "non" ou "non merci" posté après cet échange répond à ta question la plus récente — pas à la transaction passée.`;
@@ -90,8 +118,10 @@ Deno.serve(async (req: Request) => {
       message: string;
       history: { role: string; content: string }[];
       confirmed_transaction?: { montant: number; categorie: string; type: string; description?: string };
+      confirmed_modification?: { id: string; montant: number; categorie: string; type: string; description?: string };
+      confirmed_deletion?: { id: string };
     };
-    const { message, history = [], confirmed_transaction } = body;
+    const { message, history = [], confirmed_transaction, confirmed_modification, confirmed_deletion } = body;
 
     // --- Rate limiting ---
     const now = new Date();
@@ -113,7 +143,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // --- Confirmed transaction: insert then ack with full context ---
+    // --- Confirmed transaction insert ---
     if (confirmed_transaction) {
       const { montant, categorie, type, description } = confirmed_transaction;
       await supabase.from("transactions").insert({
@@ -125,33 +155,48 @@ Deno.serve(async (req: Request) => {
         date: now.toISOString().split("T")[0],
       });
 
-      const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
-      // Pass the conversation history so Claude has full context for the ack.
-      // The [TRANSACTION_INSÉRÉE] marker tells Claude the insertion is done;
-      // it only appears in this internal call, not in the chat history sent back.
-      const recentHistory = history.slice(-10);
-      const ackMessages: Anthropic.MessageParam[] = [
-        ...recentHistory.map((h) => ({
-          role: h.role as "user" | "assistant",
-          content: h.content,
-        })),
-        {
-          role: "user" as const,
-          content: `[TRANSACTION_INSÉRÉE : ${montant}€ - ${categorie} - ${type}${description ? ` (${description})` : ""}] Accuse réception en une phrase courte et relance la conversation.`,
-        },
-      ];
-
-      const ackResponse = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 150,
-        system: SYSTEM_PROMPT,
-        messages: ackMessages,
-      });
-
-      const ackText = ackResponse.content.find((b: any) => b.type === "text")?.text
-        ?? `${montant}€ en ${categorie} — enregistré. ✅`;
-
+      const ackText = await ackWithContext(
+        history,
+        `[TRANSACTION_INSÉRÉE : ${montant}€ - ${categorie} - ${type}${description ? ` (${description})` : ""}] Accuse réception en une phrase courte et relance la conversation.`,
+        `${montant}€ en ${categorie} — enregistré. ✅`
+      );
       await saveAndIncrementUsage(supabase, userId, monthStart, message || "confirmation", ackText);
+      return jsonResponse({ type: "message", message: ackText });
+    }
+
+    // --- Confirmed modification ---
+    if (confirmed_modification) {
+      const { id, montant, categorie, type, description } = confirmed_modification;
+      await supabase
+        .from("transactions")
+        .update({ montant, categorie, type, description: description ?? null })
+        .eq("id", id)
+        .eq("user_id", userId);
+
+      const ackText = await ackWithContext(
+        history,
+        `[TRANSACTION_MODIFIÉE : ${montant}€ - ${categorie} - ${type}] Accuse réception en une phrase courte.`,
+        `Transaction modifiée : ${montant}€ en ${categorie}. ✅`
+      );
+      await saveAndIncrementUsage(supabase, userId, monthStart, message || "modification", ackText);
+      return jsonResponse({ type: "message", message: ackText });
+    }
+
+    // --- Confirmed deletion ---
+    if (confirmed_deletion) {
+      const { id } = confirmed_deletion;
+      await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+
+      const ackText = await ackWithContext(
+        history,
+        `[TRANSACTION_SUPPRIMÉE] Accuse réception en une phrase courte.`,
+        `Transaction supprimée. ✅`
+      );
+      await saveAndIncrementUsage(supabase, userId, monthStart, message || "suppression", ackText);
       return jsonResponse({ type: "message", message: ackText });
     }
 
@@ -187,9 +232,7 @@ Deno.serve(async (req: Request) => {
       if (toolName === "ajouter_transaction") {
         const txInput = input as { montant: number; categorie: string; type: string; description?: string };
 
-        // Guard: if the montant doesn't appear in any user message, Claude hallucinated it.
-        // Return the text block Claude already emitted (e.g. "c'était combien ?") as a
-        // plain message so no confirmation card is shown.
+        // Guard: montant must appear explicitly in user messages — never hallucinated.
         if (!montantMentionnedByUser(txInput.montant, message, history)) {
           const clarifyText =
             response.content.find((b: any) => b.type === "text")?.text ??
@@ -198,42 +241,156 @@ Deno.serve(async (req: Request) => {
           return jsonResponse({ type: "message", message: clarifyText });
         }
 
-        // Feed "awaiting confirmation" so Claude writes a confirmation question
-        const confirmMessages: Anthropic.MessageParam[] = [
-          ...messages,
-          { role: "assistant", content: response.content },
+        const confirmText = await getConfirmationText(
+          anthropic,
+          messages,
+          response.content,
+          toolUseId,
           {
-            role: "user",
-            content: [{
-              type: "tool_result" as const,
-              tool_use_id: toolUseId,
-              content: JSON.stringify({
-                status: "awaiting_confirmation",
-                note: "L'utilisateur doit confirmer avant l'enregistrement. Pose la question de confirmation en une phrase courte et précise.",
-              }),
-            }],
+            status: "awaiting_confirmation",
+            note: "L'utilisateur doit confirmer avant l'enregistrement. Pose la question de confirmation en une phrase courte et précise. Ne dis pas que c'est déjà enregistré.",
           },
-        ];
-
-        const confirmResponse = await anthropic.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 200,
-          system: SYSTEM_PROMPT,
-          messages: confirmMessages,
-        });
-
-        const confirmText = confirmResponse.content.find((b: any) => b.type === "text")?.text
-          ?? `Tu veux que j'enregistre ${(input as any).montant}€ en ${(input as any).categorie} ?`;
+          `Tu veux que j'enregistre ${txInput.montant}€ en ${txInput.categorie} ?`
+        );
 
         await saveAndIncrementUsage(supabase, userId, monthStart, message, confirmText);
         return jsonResponse({
           type: "pending_confirmation",
           message: confirmText,
-          pending: input,
+          pending: { action: "add", ...input },
         });
       }
 
-      // Execute other tools deterministically — Claude never invents the numbers
+      if (toolName === "modifier_transaction") {
+        const modInput = input as { id: string; nouveau_montant?: number; nouvelle_categorie?: string; nouveau_type?: string; nouvelle_description?: string };
+
+        const { data: existing } = await supabase
+          .from("transactions")
+          .select("id, montant, categorie, type, description")
+          .eq("id", modInput.id)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (!existing) {
+          messages = [
+            ...messages,
+            { role: "assistant" as const, content: response.content },
+            {
+              role: "user" as const,
+              content: [{
+                type: "tool_result" as const,
+                tool_use_id: toolUseId,
+                content: JSON.stringify({ error: "Transaction introuvable. Appelle lister_transactions_recentes pour voir les IDs disponibles." }),
+              }],
+            },
+          ];
+          response = await anthropic.messages.create({
+            model: "claude-sonnet-4-6",
+            max_tokens: 300,
+            system: SYSTEM_PROMPT,
+            tools: TOOLS,
+            messages,
+          });
+          continue;
+        }
+
+        const changes: Record<string, unknown> = {};
+        if (modInput.nouveau_montant !== undefined) changes.montant = modInput.nouveau_montant;
+        if (modInput.nouvelle_categorie !== undefined) changes.categorie = modInput.nouvelle_categorie;
+        if (modInput.nouveau_type !== undefined) changes.type = modInput.nouveau_type;
+        if (modInput.nouvelle_description !== undefined) changes.description = modInput.nouvelle_description;
+
+        const ex = existing as any;
+        const confirmText = await getConfirmationText(
+          anthropic,
+          messages,
+          response.content,
+          toolUseId,
+          {
+            status: "awaiting_confirmation",
+            current: ex,
+            changes,
+            note: "Montre les changements et pose la question de confirmation en une phrase. Ne dis pas que la modification est déjà faite.",
+          },
+          `Tu veux modifier cette transaction ?`
+        );
+
+        await saveAndIncrementUsage(supabase, userId, monthStart, message, confirmText);
+        return jsonResponse({
+          type: "pending_confirmation",
+          message: confirmText,
+          pending: {
+            action: "modify",
+            id: ex.id,
+            current: { montant: ex.montant, categorie: ex.categorie, type: ex.type, description: ex.description },
+            changes,
+          },
+        });
+      }
+
+      if (toolName === "supprimer_transaction") {
+        const delInput = input as { id: string };
+
+        const { data: existing } = await supabase
+          .from("transactions")
+          .select("id, montant, categorie, type, description")
+          .eq("id", delInput.id)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (!existing) {
+          messages = [
+            ...messages,
+            { role: "assistant" as const, content: response.content },
+            {
+              role: "user" as const,
+              content: [{
+                type: "tool_result" as const,
+                tool_use_id: toolUseId,
+                content: JSON.stringify({ error: "Transaction introuvable. Appelle lister_transactions_recentes pour voir les IDs disponibles." }),
+              }],
+            },
+          ];
+          response = await anthropic.messages.create({
+            model: "claude-sonnet-4-6",
+            max_tokens: 300,
+            system: SYSTEM_PROMPT,
+            tools: TOOLS,
+            messages,
+          });
+          continue;
+        }
+
+        const ex = existing as any;
+        const confirmText = await getConfirmationText(
+          anthropic,
+          messages,
+          response.content,
+          toolUseId,
+          {
+            status: "awaiting_confirmation",
+            transaction: ex,
+            note: "Demande confirmation de suppression en une phrase. Ne dis PAS que la suppression est déjà faite.",
+          },
+          `Tu veux supprimer cette transaction ?`
+        );
+
+        await saveAndIncrementUsage(supabase, userId, monthStart, message, confirmText);
+        return jsonResponse({
+          type: "pending_confirmation",
+          message: confirmText,
+          pending: {
+            action: "delete",
+            id: ex.id,
+            montant: ex.montant,
+            categorie: ex.categorie,
+            type: ex.type,
+            description: ex.description,
+          },
+        });
+      }
+
+      // Execute read-only tools deterministically
       let toolResult: unknown;
       try {
         toolResult = await executeTool(supabase, userId, toolName, input as Record<string, unknown>);
@@ -275,10 +432,65 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// Returns true if the user explicitly stated a number matching `montant` anywhere
-// in the conversation (current message + history). Catches hallucinated amounts
-// like calling ajouter_transaction({montant: 1.20}) when the user only said
-// "j'ai mangé un pain au chocolat" without giving a price.
+// Shared helper: ask Claude for a confirmation question then return the text
+async function getConfirmationText(
+  anthropic: Anthropic,
+  messages: Anthropic.MessageParam[],
+  assistantContent: Anthropic.ContentBlock[],
+  toolUseId: string,
+  toolResultContent: unknown,
+  fallback: string
+): Promise<string> {
+  const confirmMessages: Anthropic.MessageParam[] = [
+    ...messages,
+    { role: "assistant", content: assistantContent },
+    {
+      role: "user",
+      content: [{
+        type: "tool_result" as const,
+        tool_use_id: toolUseId,
+        content: JSON.stringify(toolResultContent),
+      }],
+    },
+  ];
+
+  const confirmResponse = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 200,
+    system: SYSTEM_PROMPT,
+    messages: confirmMessages,
+  });
+
+  return confirmResponse.content.find((b: any) => b.type === "text")?.text ?? fallback;
+}
+
+// Shared helper: generate an ack message with history context
+async function ackWithContext(
+  history: { role: string; content: string }[],
+  prompt: string,
+  fallback: string
+): Promise<string> {
+  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+  const recentHistory = history.slice(-10);
+  const ackMessages: Anthropic.MessageParam[] = [
+    ...recentHistory.map((h) => ({
+      role: h.role as "user" | "assistant",
+      content: h.content,
+    })),
+    { role: "user" as const, content: prompt },
+  ];
+
+  const ackResponse = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 150,
+    system: SYSTEM_PROMPT,
+    messages: ackMessages,
+  });
+
+  return ackResponse.content.find((b: any) => b.type === "text")?.text ?? fallback;
+}
+
+// Handles French money formats: "1€20", "1 euro 20", standard decimals, etc.
 function montantMentionnedByUser(
   montant: number,
   currentMessage: string,
@@ -288,8 +500,29 @@ function montantMentionnedByUser(
     currentMessage,
     ...history.filter((h) => h.role === "user").map((h) => h.content),
   ].join(" ");
-  const numbers = userTexts.match(/\d+([.,]\d+)?/g) ?? [];
-  return numbers.some((n) => Math.abs(parseFloat(n.replace(",", ".")) - montant) < 0.01);
+
+  const values: number[] = [];
+
+  // "1€20", "1 € 20" → 1.20
+  const euroSplit = /(\d+)\s*€\s*(\d+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = euroSplit.exec(userTexts)) !== null) {
+    values.push(Number(m[1]) + Number(m[2]) / 100);
+  }
+
+  // "1 euro 20", "1 euros 20" → 1.20
+  const euroWord = /(\d+)\s*euros?\s*(\d+)/gi;
+  while ((m = euroWord.exec(userTexts)) !== null) {
+    values.push(Number(m[1]) + Number(m[2]) / 100);
+  }
+
+  // Standard: "1.20", "1,20", integers
+  const standard = userTexts.match(/\d+([.,]\d+)?/g) ?? [];
+  for (const n of standard) {
+    values.push(parseFloat(n.replace(",", ".")));
+  }
+
+  return values.some((v) => Math.abs(v - montant) < 0.01);
 }
 
 async function executeTool(
@@ -350,7 +583,7 @@ async function executeTool(
       const limite = Math.min(Number(input.limite ?? 10), 50);
       const { data } = await supabase
         .from("transactions")
-        .select("montant, categorie, type, description, date")
+        .select("id, montant, categorie, type, description, date")
         .eq("user_id", userId)
         .order("date", { ascending: false })
         .limit(limite);

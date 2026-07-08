@@ -21,12 +21,15 @@ import { supabase } from '@/lib/supabase';
 type MessageFrom = 'karl' | 'user';
 type Message = { id: string; from: MessageFrom; text: string };
 
-type PendingTransaction = {
-  montant: number;
-  categorie: string;
-  type: 'depense' | 'revenu';
-  description?: string;
-};
+type PendingAction =
+  | { action: 'add'; montant: number; categorie: string; type: 'depense' | 'revenu'; description?: string }
+  | { action: 'delete'; id: string; montant: number; categorie: string; type: 'depense' | 'revenu'; description?: string }
+  | {
+      action: 'modify';
+      id: string;
+      current: { montant: number; categorie: string; type: string; description?: string };
+      changes: { montant?: number; categorie?: string; type?: string; description?: string };
+    };
 
 const SUGGESTIONS_FREELANCE = ['Je peux me payer combien ?', 'Mes dernières dépenses', 'J\'ai encaissé 500€'];
 const SUGGESTIONS_PERSO = ['Il me reste combien ?', 'Mes plus grosses dépenses', 'J\'ai dépensé 40€ en resto'];
@@ -92,7 +95,7 @@ export default function ChatScreen() {
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingTransaction, setPendingTransaction] = useState<PendingTransaction | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [editedMontant, setEditedMontant] = useState('');
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
@@ -113,7 +116,7 @@ export default function ChatScreen() {
     return id;
   }
 
-  async function callKarlChat(body: object): Promise<{ type: string; message: string; pending?: PendingTransaction }> {
+  async function callKarlChat(body: object): Promise<{ type: string; message: string; pending?: PendingAction }> {
     const { data, error: fnError } = await supabase.functions.invoke('karl-chat', { body });
     if (fnError) throw new Error(fnError.message);
     if (!data) throw new Error('Réponse vide');
@@ -142,9 +145,13 @@ export default function ChatScreen() {
       } else if (result.type === 'pending_confirmation') {
         addMessage('karl', result.message);
         const pending = result.pending ?? null;
-        setPendingTransaction(pending);
-        if (pending) {
+        setPendingAction(pending);
+        if (pending?.action === 'add') {
           setEditedMontant(String(pending.montant).replace('.', ','));
+        } else if (pending?.action === 'modify' && pending.changes.montant !== undefined) {
+          setEditedMontant(String(pending.changes.montant).replace('.', ','));
+        } else {
+          setEditedMontant('');
         }
       } else {
         addMessage('karl', result.message);
@@ -156,41 +163,94 @@ export default function ChatScreen() {
     }
   }
 
-  async function confirmTransaction() {
-    const parsedMontant = parseFloat(editedMontant.replace(',', '.'));
-    if (!pendingTransaction || isLoading || isNaN(parsedMontant) || parsedMontant <= 0) return;
+  async function confirmAction() {
+    if (!pendingAction || isLoading) return;
     setError(null);
-    const tx = { ...pendingTransaction, montant: parsedMontant };
-    setPendingTransaction(null);
-    setEditedMontant('');
-    setIsLoading(true);
 
-    try {
-      const result = await callKarlChat({
-        message: 'confirmé',
-        history: buildHistory(),
-        confirmed_transaction: tx,
-      });
-      // Add both messages after the API call so future buildHistory() calls
-      // produce a valid alternating sequence: the "✅ Confirmé" user message
-      // anchors the confirmation in history and prevents Claude from treating
-      // a subsequent "non" as a rejection of the already-inserted transaction.
-      addMessage('user', '✅ Confirmé');
-      addMessage('karl', result.message);
-    } catch (err: any) {
-      setError(err.message ?? 'Erreur lors de l\'enregistrement.');
-    } finally {
-      setIsLoading(false);
+    if (pendingAction.action === 'add') {
+      const parsedMontant = parseFloat(editedMontant.replace(',', '.'));
+      if (isNaN(parsedMontant) || parsedMontant <= 0) return;
+      const tx = { ...pendingAction, montant: parsedMontant };
+      setPendingAction(null);
+      setEditedMontant('');
+      setIsLoading(true);
+      try {
+        const result = await callKarlChat({
+          message: 'confirmé',
+          history: buildHistory(),
+          confirmed_transaction: tx,
+        });
+        addMessage('user', '✅ Confirmé');
+        addMessage('karl', result.message);
+      } catch (err: any) {
+        setError(err.message ?? 'Erreur lors de l\'enregistrement.');
+      } finally {
+        setIsLoading(false);
+      }
+
+    } else if (pendingAction.action === 'modify') {
+      const resolvedMontant = (() => {
+        if (pendingAction.changes.montant !== undefined) {
+          const parsed = parseFloat(editedMontant.replace(',', '.'));
+          return !isNaN(parsed) && parsed > 0 ? parsed : pendingAction.current.montant;
+        }
+        return pendingAction.current.montant;
+      })();
+      const payload = {
+        id: pendingAction.id,
+        montant: resolvedMontant,
+        categorie: pendingAction.changes.categorie ?? pendingAction.current.categorie,
+        type: pendingAction.changes.type ?? pendingAction.current.type,
+        description: pendingAction.changes.description ?? pendingAction.current.description,
+      };
+      setPendingAction(null);
+      setEditedMontant('');
+      setIsLoading(true);
+      try {
+        const result = await callKarlChat({
+          message: 'confirmé',
+          history: buildHistory(),
+          confirmed_modification: payload,
+        });
+        addMessage('user', '✅ Confirmé');
+        addMessage('karl', result.message);
+      } catch (err: any) {
+        setError(err.message ?? 'Erreur lors de la modification.');
+      } finally {
+        setIsLoading(false);
+      }
+
+    } else if (pendingAction.action === 'delete') {
+      const { id } = pendingAction;
+      setPendingAction(null);
+      setEditedMontant('');
+      setIsLoading(true);
+      try {
+        const result = await callKarlChat({
+          message: 'confirmé',
+          history: buildHistory(),
+          confirmed_deletion: { id },
+        });
+        addMessage('user', '🗑️ Supprimé');
+        addMessage('karl', result.message);
+      } catch (err: any) {
+        setError(err.message ?? 'Erreur lors de la suppression.');
+      } finally {
+        setIsLoading(false);
+      }
     }
   }
 
-  function cancelTransaction() {
-    setPendingTransaction(null);
+  function cancelAction() {
+    setPendingAction(null);
     setEditedMontant('');
     addMessage('karl', "Pas de souci, on n'enregistre rien. 👍");
   }
 
   const isValidMontant = (() => {
+    if (!pendingAction) return false;
+    if (pendingAction.action === 'delete') return true;
+    if (pendingAction.action === 'modify' && pendingAction.changes.montant === undefined) return true;
     const v = parseFloat(editedMontant.replace(',', '.'));
     return !isNaN(v) && v > 0;
   })();
@@ -244,35 +304,82 @@ export default function ChatScreen() {
 
         {/* Input area */}
         <View style={styles.inputArea}>
-          {pendingTransaction ? (
-            /* Confirmation UI — amount is editable in case Karl was slightly off */
+          {pendingAction ? (
             <View style={styles.confirmBlock}>
-              <View style={styles.confirmAmountRow}>
-                <TextInput
-                  style={styles.confirmAmountInput}
-                  value={editedMontant}
-                  onChangeText={setEditedMontant}
-                  keyboardType="decimal-pad"
-                  selectTextOnFocus
-                />
-                <Text style={styles.confirmMeta}>
-                  {'€ · '}{pendingTransaction.categorie}{' · '}{pendingTransaction.type}
-                </Text>
-              </View>
+              {/* ADD: editable amount */}
+              {pendingAction.action === 'add' && (
+                <View style={styles.confirmAmountRow}>
+                  <TextInput
+                    style={styles.confirmAmountInput}
+                    value={editedMontant}
+                    onChangeText={setEditedMontant}
+                    keyboardType="decimal-pad"
+                    selectTextOnFocus
+                  />
+                  <Text style={styles.confirmMeta}>
+                    {'€ · '}{pendingAction.categorie}{' · '}{pendingAction.type}
+                  </Text>
+                </View>
+              )}
+
+              {/* MODIFY: show current → new */}
+              {pendingAction.action === 'modify' && (
+                <View style={styles.confirmModifyRow}>
+                  {pendingAction.changes.montant !== undefined ? (
+                    <View style={styles.confirmAmountRow}>
+                      <TextInput
+                        style={styles.confirmAmountInput}
+                        value={editedMontant}
+                        onChangeText={setEditedMontant}
+                        keyboardType="decimal-pad"
+                        selectTextOnFocus
+                      />
+                      <Text style={styles.confirmMeta}>
+                        {'€ · '}{pendingAction.changes.categorie ?? pendingAction.current.categorie}
+                        {' · '}{pendingAction.changes.type ?? pendingAction.current.type}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.confirmMeta}>
+                      {pendingAction.current.montant}€ · {pendingAction.current.categorie}
+                      {' → '}{pendingAction.changes.categorie ?? pendingAction.current.categorie}
+                      {' · '}{pendingAction.changes.type ?? pendingAction.current.type}
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* DELETE: show what will be removed */}
+              {pendingAction.action === 'delete' && (
+                <View style={styles.confirmDeleteRow}>
+                  <Text style={styles.confirmDeleteText}>
+                    🗑️ {pendingAction.montant}€ · {pendingAction.categorie} · {pendingAction.type}
+                    {pendingAction.description ? ` · ${pendingAction.description}` : ''}
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.confirmButtons}>
                 <Pressable
                   style={[
                     styles.confirmBtn,
-                    { backgroundColor: accent, opacity: isValidMontant ? 1 : 0.4 },
+                    pendingAction.action === 'delete'
+                      ? styles.confirmBtnDelete
+                      : { backgroundColor: accent, opacity: isValidMontant ? 1 : 0.4 },
                   ]}
-                  onPress={confirmTransaction}
+                  onPress={confirmAction}
                   disabled={!isValidMontant}
                 >
-                  <Text style={[styles.confirmBtnText, { color: C.dark }]}>✅ Confirmer</Text>
+                  <Text style={[
+                    styles.confirmBtnText,
+                    { color: pendingAction.action === 'delete' ? C.text : C.dark },
+                  ]}>
+                    {pendingAction.action === 'delete' ? '🗑️ Confirmer la suppression' : '✅ Confirmer'}
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={[styles.confirmBtn, styles.confirmBtnCancel]}
-                  onPress={cancelTransaction}
+                  onPress={cancelAction}
                 >
                   <Text style={styles.confirmBtnText}>❌ Annuler</Text>
                 </Pressable>
@@ -448,6 +555,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: C.muted,
     letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  confirmModifyRow: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  confirmDeleteRow: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  confirmDeleteText: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 12,
+    color: '#ff5050',
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   confirmButtons: { flexDirection: 'row', gap: 10 },
   confirmBtn: {
@@ -460,6 +583,9 @@ const styles = StyleSheet.create({
     backgroundColor: C.surf2,
     borderWidth: 1,
     borderColor: C.line,
+  },
+  confirmBtnDelete: {
+    backgroundColor: '#ff5050',
   },
   confirmBtnText: {
     fontFamily: 'Sora_700Bold',
