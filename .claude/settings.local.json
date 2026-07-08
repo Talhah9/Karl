@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.nativewind.dev)",
+      "Bash(npx expo *)",
+      "Bash(npm install *)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\gazou\\\\Desktop\\\\bilan-app\\\\src\\\\context\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\gazou\\\\Desktop\\\\bilan-app\\\\src\\\\components\\\\ui\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\gazou\\\\Desktop\\\\bilan-app\\\\src\\\\app\\\\onboarding\\\\freelance\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\gazou\\\\Desktop\\\\bilan-app\\\\src\\\\app\\\\onboarding\\\\perso\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\gazou\\\\Desktop\\\\bilan-app\\\\src\\\\app\\\\\\(tabs\\)\")",
+      "Bash(powershell -Command \"\\(Get-Content 'src/app/\\(tabs\\)/index.tsx'\\) -replace \\\\\"router\\\\.push\\\\\\('/add'\\\\\\)\\\\\", \\\\\"router.push\\('/\\(tabs\\)/add'\\)\\\\\" -replace \\\\\"router\\\\.push\\\\\\('/chat'\\\\\\)\\\\\", \\\\\"router.push\\('/\\(tabs\\)/chat'\\)\\\\\" | Set-Content 'src/app/\\(tabs\\)/index.tsx'\")"
+    ]
+  }
+}

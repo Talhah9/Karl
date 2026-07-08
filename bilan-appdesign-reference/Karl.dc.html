@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+ --bg:#12100f;--surf:#1d1a17;--surf2:#272219;--surf3:#322b21;--line:rgba(255,255,255,.09);
+ --lime:#c4f542;--purple:#a78bfa;--text:#f6f3ee;--muted:#9a9288;--warm:#ff7a4d;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Sora',system-ui,sans-serif;color:var(--text);
+ background:radial-gradient(1100px 700px at 12% -5%,rgba(196,245,66,.10),transparent 55%),radial-gradient(1000px 800px at 92% 8%,rgba(167,139,250,.12),transparent 55%),#0a0908;}
+.wrap{padding:60px 52px 110px;margin:0 auto;max-width:1680px}
+/* masthead */
+.mh{display:flex;align-items:center;gap:22px;margin-bottom:12px}
+.mh-word{font-size:56px;font-weight:800;letter-spacing:-.04em;line-height:.9}
+.mh-sub{max-width:640px;color:var(--muted);font-size:17px;line-height:1.5;margin:6px 0 0}
+.mh-sub b{color:var(--text);font-weight:600}
+.kbrand{color:var(--lime)}
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin:34px 0 50px}
+.lcard{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:20px;padding:18px 20px}
+.llabel{font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:.12em;font-size:10px;color:var(--muted);margin:0 0 13px}
+.sw{display:flex;gap:10px;align-items:center}
+.chip{display:flex;flex-direction:column;gap:6px;align-items:center;font-family:'Space Mono',monospace;font-size:9px;color:var(--muted)}
+.dot{width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.14)}
+.typerow{display:flex;align-items:baseline;gap:14px}
+/* groups */
+.group{margin:0 0 66px}
+.ghd{display:flex;align-items:baseline;gap:14px;margin:0 0 24px;flex-wrap:wrap}
+.gnum{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:#111;background:var(--lime);padding:4px 9px;border-radius:7px}
+.gname{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.gdesc{color:var(--muted);font-size:14px;max-width:520px}
+.grow{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}
+.cap{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;margin:14px 2px 0}
+.phonewrap{display:flex;flex-direction:column}
+/* iPhone */
+.phone{width:308px;background:#050505;border-radius:46px;padding:9px;flex:none;
+ box-shadow:0 50px 90px -30px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.07),inset 0 0 0 2px #1a1a1a}
+.screen{width:290px;height:628px;background:var(--bg);border-radius:38px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:88px;height:25px;background:#000;border-radius:14px;z-index:40}
+.statusbar{height:48px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:8px 24px 0 26px;font-size:13.5px;font-weight:600}
+.sbr{display:flex;align-items:center;gap:6px}
+.bat{width:22px;height:11px;border:1.4px solid var(--text);border-radius:3px;position:relative;opacity:.9}
+.bat::after{content:'';position:absolute;top:1.4px;bottom:1.4px;left:1.4px;width:12px;background:var(--text);border-radius:1px}
+.homebar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:118px;height:5px;border-radius:3px;background:rgba(255,255,255,.32);z-index:40}
+.body{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden}
+.scroll::-webkit-scrollbar{display:none}
+.pad{padding-left:20px;padding-right:20px}
+/* utils */
+.col{display:flex;flex-direction:column}
+.row{display:flex;align-items:center}
+.between{display:flex;align-items:center;justify-content:space-between}
+.wrap-r{flex-wrap:wrap}
+.mono{font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:.09em}
+.muted{color:var(--muted)}
+.lime{color:var(--lime)}.warm{color:var(--warm)}.purp{color:var(--purple)}
+.big{font-weight:800;letter-spacing:-.035em;line-height:.95}
+.divider{height:1px;background:var(--line)}
+/* mascotte Karl */
+.karl{width:46px;height:46px;background:var(--lime);border-radius:44% 44% 47% 47%/47% 47% 43% 43%;position:relative;flex:none;box-shadow:0 6px 18px -6px rgba(196,245,66,.5)}
+.karl::before,.karl::after{content:'';position:absolute;top:34%;width:13%;height:22%;background:#141210;border-radius:44%}
+.karl::before{left:27%}.karl::after{right:27%}
+.karl .brow{position:absolute;top:24%;left:22%;right:22%;height:8%;border-radius:4px;background:#141210;opacity:0;transform:rotate(-6deg)}
+.karl.smug::after{height:14%;top:38%}
+/* buttons */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border-radius:26px;background:var(--lime);color:#141210;font-weight:700;font-size:15px;border:none;cursor:pointer;width:100%}
+.btn.ghost{background:transparent;border:1.5px solid var(--line);color:var(--text)}
+.btn.dark{background:var(--surf2);color:var(--text)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:16px;background:var(--surf2);border:1px solid var(--line);font-size:12px;color:var(--text)}
+.tag{display:inline-flex;align-items:center;gap:5px;font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:.08em;font-size:9.5px;padding:4px 8px;border-radius:7px}
+.tag.lime{background:rgba(196,245,66,.15);color:var(--lime)}
+.tag.warm{background:rgba(255,122,77,.16);color:var(--warm)}
+.tag.pur{background:rgba(167,139,250,.16);color:var(--purple)}
+.tag.mut{background:var(--surf2);color:var(--muted)}
+/* cards */
+.card{background:var(--surf);border:1px solid var(--line);border-radius:22px;padding:18px}
+.card.hi{background:linear-gradient(160deg,#e6ff6b,#c4f542);color:#141210;border:none}
+.card.pur{background:linear-gradient(160deg,rgba(167,139,250,.18),rgba(167,139,250,.06));border:1px solid rgba(167,139,250,.28)}
+/* gauge ring */
+.ring{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;flex:none}
+.ring-in{width:84px;height:84px;border-radius:50%;background:var(--surf);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+/* progress bar */
+.bar{height:9px;border-radius:6px;background:rgba(255,255,255,.10);overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:6px;background:var(--lime)}
+/* segmented */
+.seg{display:flex;background:var(--surf);border:1px solid var(--line);border-radius:15px;padding:4px;gap:4px}
+.seg>span{flex:1;text-align:center;padding:9px 0;border-radius:11px;font-size:13px;font-weight:600;color:var(--muted)}
+.seg>span.on{background:var(--lime);color:#141210}
+/* fields */
+.field{background:var(--surf);border:1px solid var(--line);border-radius:15px;padding:13px 15px;display:flex;align-items:center;justify-content:space-between}
+.field .lab{font-size:12px;color:var(--muted)}
+.field .val{font-size:14px;font-weight:600}
+/* toggle */
+.tgl{width:42px;height:25px;border-radius:13px;background:var(--surf3);position:relative;flex:none}
+.tgl.on{background:var(--lime)}
+.tgl::after{content:'';position:absolute;top:2.5px;left:2.5px;width:20px;height:20px;border-radius:50%;background:#fff}
+.tgl.on::after{left:19.5px}
+/* chat bubbles */
+.bk{align-self:flex-start;max-width:82%;background:var(--surf2);border-radius:19px 19px 19px 6px;padding:10px 13px;font-size:13px;line-height:1.4}
+.bu{align-self:flex-end;max-width:82%;background:var(--lime);color:#141210;border-radius:19px 19px 6px 19px;padding:10px 13px;font-size:13px;font-weight:500;line-height:1.4}
+.typing{align-self:flex-start;background:var(--surf2);border-radius:19px 19px 19px 6px;padding:13px 15px;display:flex;gap:5px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:bl 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes bl{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+/* tabbar */
+.tabbar{height:70px;flex:none;border-top:1px solid var(--line);display:flex;align-items:center;background:rgba(10,9,8,.82);backdrop-filter:blur(12px);padding-bottom:8px}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.tab.on{color:var(--lime)}
+.tico{width:22px;height:22px;display:grid;place-items:center}
+.ic-home{width:17px;height:16px;border:2px solid currentColor;border-radius:3px 3px 4px 4px;border-top-width:5px}
+.ic-chat{width:17px;height:15px;border:2px solid currentColor;border-radius:8px 8px 8px 2px}
+.ic-bars{display:flex;align-items:flex-end;gap:3px;height:16px}
+.ic-bars i{width:4px;background:currentColor;border-radius:1px}
+.fab{width:46px;height:46px;border-radius:50%;background:var(--lime);color:#141210;display:grid;place-items:center;font-size:26px;font-weight:400;margin-top:-14px;box-shadow:0 8px 20px -6px rgba(196,245,66,.55)}
+/* onboarding dots */
+.dots{display:flex;gap:6px;justify-content:center}
+.dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22)}
+.dots i.on{width:22px;background:var(--lime)}
+/* status option */
+.opt{background:var(--surf);border:1.5px solid var(--line);border-radius:16px;padding:14px 15px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.opt.on{border-color:var(--lime);background:rgba(196,245,66,.07)}
+.radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);flex:none;display:grid;place-items:center}
+.opt.on .radio{border-color:var(--lime)}
+.opt.on .radio::after{content:'';width:9px;height:9px;border-radius:50%;background:var(--lime)}
+.legalline{font-size:9px;color:var(--muted);text-align:center;line-height:1.4;font-family:'Space Mono',monospace;letter-spacing:.02em}
+.float{animation:fl 5s ease-in-out infinite}
+@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+</style>
+</helmet>
+
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" fill="#12100f"/>
+    <g transform="translate(30 30)">
+      <path d="M0 8 Q0 0 8 0 L32 0 Q40 0 40 8 L40 30 Q40 40 32 40 L8 40 Q0 40 0 30 Z" fill="#c4f542"/>
+      <ellipse cx="12" cy="20" rx="3" ry="5" fill="#141210"/>
+      <ellipse cx="28" cy="20" rx="3" ry="5" fill="#141210"/>
+    </g>
+  </svg>
+</template>
+<div class="wrap">
+  <div class="mh">
+    <div class="karl float" style="width:74px;height:74px"></div>
+    <div>
+      <div class="mh-word">Karl<span class="kbrand">.</span></div>
+    </div>
+  </div>
+  <p class="mh-sub">Le coach financier IA qui parle <b>cash</b> — aux <b>freelances</b> comme aux <b>salariés</b>. Un seul cœur produit (coach, jauges, projections), deux parcours qui s'adaptent à ta vie et à ton vocabulaire. <b>Maquette complète · iOS · FR.</b></p>
+
+  <div class="legend">
+    <div class="lcard">
+      <p class="llabel">Palette</p>
+      <div class="sw">
+        <div class="chip"><span class="dot" style="background:#12100f"></span>bg</div>
+        <div class="chip"><span class="dot" style="background:#1d1a17"></span>surface</div>
+        <div class="chip"><span class="dot" style="background:#c4f542"></span>lime</div>
+        <div class="chip"><span class="dot" style="background:#a78bfa"></span>violet</div>
+        <div class="chip"><span class="dot" style="background:#ff7a4d"></span>alerte</div>
+      </div>
+    </div>
+    <div class="lcard">
+      <p class="llabel">Type · Sora + Space Mono</p>
+      <div class="typerow">
+        <span class="big" style="font-size:38px">5 830 €</span>
+        <span style="font-size:15px;font-weight:600">Titre</span>
+        <span class="mono" style="font-size:10px;color:var(--muted)">URSSAF · T2</span>
+      </div>
+    </div>
+    <div class="lcard">
+      <p class="llabel">Composants</p>
+      <div class="row" style="gap:12px">
+        <span style="background:var(--lime);color:#141210;font-weight:700;font-size:12px;padding:8px 14px;border-radius:20px">Bouton</span>
+        <span class="tag lime">J-18</span>
+        <span class="ring" style="width:44px;height:44px;background:conic-gradient(var(--lime) 0 26%,rgba(255,255,255,.12) 26% 100%)"><span class="ring-in" style="width:32px;height:32px;background:var(--bg)"></span></span>
+        <span class="tgl on"></span>
+      </div>
+    </div>
+    <div class="lcard">
+      <p class="llabel">Mascotte · Karl</p>
+      <div class="row" style="gap:14px">
+        <span class="karl" style="width:40px;height:40px"></span>
+        <span class="karl smug" style="width:40px;height:40px"></span>
+        <span class="karl" style="width:40px;height:40px;background:var(--purple)"></span>
+      </div>
+    </div>
+    <div class="lcard">
+      <p class="llabel">Deux parcours · une app</p>
+      <div class="col" style="gap:10px">
+        <span class="row" style="gap:8px"><span class="tag lime">Freelance</span><span class="muted" style="font-size:11px">charges · URSSAF · trimestre</span></span>
+        <span class="row" style="gap:8px"><span class="tag pur">Perso</span><span class="muted" style="font-size:11px">salaire · budget · fin de mois</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ONBOARDING ===================== -->
+  <section class="group">
+    <div class="ghd"><span class="gnum">01</span><span class="gname">Onboarding & choix de profil</span><span class="gdesc">Le cœur partagé : on présente Karl, puis on demande si l'utilisateur est freelance ou particulier. Tout le reste du parcours en découle.</span></div>
+    <div class="grow">
+
+      <!-- 1. Concept -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="justify-content:space-between;padding-top:20px;padding-bottom:22px">
+              <div class="col" style="align-items:center;gap:18px;margin-top:26px">
+                <div class="karl float" style="width:96px;height:96px"></div>
+                <div class="col" style="gap:12px;align-items:center;text-align:center">
+                  <h1 class="big" style="font-size:27px;margin:0">Salut.<br>Moi c'est Karl.</h1>
+                  <p style="font-size:14px;line-height:1.45;color:var(--text);margin:0;max-width:230px">Je calcule ce que tu peux <b>vraiment</b> te payer. Sans te faire flipper à l'URSSAF.</p>
+                </div>
+              </div>
+              <div class="col" style="gap:18px">
+                <div class="dots"><i class="on"></i><i></i><i></i></div>
+                <button class="btn">Ça m'intéresse</button>
+                <p class="legalline">Karl est un coach, pas un conseiller<br>financier réglementé.</p>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap">1.1 · Concept</p>
+      </div>
+
+      <!-- 2. How it works -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="justify-content:space-between;padding-top:20px;padding-bottom:22px">
+              <div class="col" style="gap:16px">
+                <h1 class="big" style="font-size:23px;margin:0">Voilà le deal.</h1>
+                <div class="col" style="gap:10px">
+                  <div class="card row" style="gap:13px;align-items:flex-start;padding:14px">
+                    <span class="ring" style="width:38px;height:38px;background:conic-gradient(var(--lime) 0 100%)"><span class="ring-in" style="width:26px;height:26px;background:var(--surf);font-weight:800;color:var(--lime);font-size:14px">%</span></span>
+                    <div class="col" style="gap:3px"><span style="font-weight:700;font-size:14px">Je mets tes charges de côté</span><span class="muted" style="font-size:12px;line-height:1.4">Avant que tu les dépenses. L'URSSAF ne te surprendra plus.</span></div>
+                  </div>
+                  <div class="card row" style="gap:13px;align-items:flex-start;padding:14px">
+                    <span style="width:38px;height:38px;border-radius:12px;background:rgba(167,139,250,.18);display:grid;place-items:center;flex:none"><span class="big purp" style="font-size:20px">€</span></span>
+                    <div class="col" style="gap:3px"><span style="font-weight:700;font-size:14px">Je te dis combien te verser</span><span class="muted" style="font-size:12px;line-height:1.4">Chaque semaine, un montant que tu peux prendre sans culpabiliser.</span></div>
+                  </div>
+                  <div class="card row" style="gap:13px;align-items:flex-start;padding:14px">
+                    <span class="karl" style="width:38px;height:38px;flex:none"></span>
+                    <div class="col" style="gap:3px"><span style="font-weight:700;font-size:14px">Zéro jargon</span><span class="muted" style="font-size:12px;line-height:1.4">Je parle comme un pote qui a fait de la compta. Pas comme ta banque.</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="col" style="gap:18px">
+                <div class="dots"><i></i><i class="on"></i><i></i></div>
+                <button class="btn">Continuer</button>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap">1.2 · Comment ça marche</p>
+      </div>
+
+      <!-- 3. Choix de profil -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="justify-content:space-between;padding-top:20px;padding-bottom:22px">
+              <div class="col" style="gap:18px">
+                <div class="col" style="gap:8px">
+                  <h1 class="big" style="font-size:22px;margin:0">Karl bosse pour qui ?</h1>
+                  <p class="muted" style="font-size:13px;margin:0">Je m'adapte à ta situation. Tu pourras changer d'avis plus tard.</p>
+                </div>
+                <div class="col" style="gap:12px">
+                  <div class="opt on col" style="align-items:stretch;gap:9px;padding:16px">
+                    <div class="between"><div class="row" style="gap:11px"><span class="karl" style="width:38px;height:38px"></span><span style="font-weight:700;font-size:14.5px">Entrepreneur / freelance</span></div><span class="radio"></span></div>
+                    <p class="muted" style="font-size:11.5px;line-height:1.45;margin:0">Je provisionne ton URSSAF, je calcule ce que tu peux te verser et je te préviens avant chaque échéance.</p>
+                  </div>
+                  <div class="opt col" style="align-items:stretch;gap:9px;padding:16px">
+                    <div class="between"><div class="row" style="gap:11px"><span class="karl" style="width:38px;height:38px;background:var(--purple);box-shadow:0 6px 18px -6px rgba(167,139,250,.5)"></span><span style="font-weight:700;font-size:14.5px">Salarié / particulier</span></div><span class="radio"></span></div>
+                    <p class="muted" style="font-size:11.5px;line-height:1.45;margin:0">Je suis ton salaire, tes dépenses et tes objectifs. Je te dis ce qu'il te reste vraiment jusqu'à la fin du mois.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col" style="gap:18px">
+                <div class="dots"><i></i><i></i><i class="on"></i></div>
+                <button class="btn">Continuer</button>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap">1.3 · Choix de profil</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== ONBOARDING FREELANCE ===================== -->
+  <section class="group">
+    <div class="ghd"><span class="gnum">02</span><span class="gname">Onboarding · Freelance</span><span class="gdesc">Branche « entrepreneur » : statut, revenu moyen et régime de charges — pour calculer le bon taux de provision.</span></div>
+    <div class="grow">
+
+      <!-- 3. Statut -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="justify-content:space-between;padding-top:20px;padding-bottom:22px">
+              <div class="col" style="gap:18px">
+                <div class="col" style="gap:8px">
+                  <h1 class="big" style="font-size:22px;margin:0">Tu es sous quel statut ?</h1>
+                  <p class="muted" style="font-size:13px;margin:0">Ça me sert à calculer tes cotisations au bon taux.</p>
+                </div>
+                <div class="col" style="gap:8px">
+                  <div class="opt on" style="padding:11px 13px">
+                    <div class="col" style="gap:2px"><span style="font-weight:700;font-size:13.5px">Micro · Prestations BNC</span><span class="muted" style="font-size:11px">Dev, design, conseil, freelance</span></div>
+                    <div class="row" style="gap:9px"><span class="tag lime">24,6 %</span><span class="radio"></span></div>
+                  </div>
+                  <div class="opt" style="padding:11px 13px">
+                    <div class="col" style="gap:2px"><span style="font-weight:700;font-size:13.5px">Micro · Prestations BIC</span><span class="muted" style="font-size:11px">Services commerciaux, artisanat</span></div>
+                    <div class="row" style="gap:9px"><span class="tag mut">21,2 %</span><span class="radio"></span></div>
+                  </div>
+                  <div class="opt" style="padding:11px 13px">
+                    <div class="col" style="gap:2px"><span style="font-weight:700;font-size:13.5px">Micro · Vente de marchandises</span><span class="muted" style="font-size:11px">Achat-revente, e-commerce</span></div>
+                    <div class="row" style="gap:9px"><span class="tag mut">12,3 %</span><span class="radio"></span></div>
+                  </div>
+                  <div class="opt" style="padding:11px 13px">
+                    <div class="col" style="gap:2px"><span style="font-weight:700;font-size:13.5px">Autre / je sais pas trop</span><span class="muted" style="font-size:11px">Karl t'aide à y voir clair</span></div>
+                    <span class="radio"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="col" style="gap:18px">
+                <div class="dots"><i class="on"></i><i></i><i></i></div>
+                <button class="btn">Suivant</button>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag lime" style="margin-right:7px">Freelance</span>2.1 · Statut</p>
+      </div>
+
+      <!-- 4. Revenus -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="justify-content:space-between;padding-top:20px;padding-bottom:22px">
+              <div class="col" style="gap:22px">
+                <div class="col" style="gap:8px">
+                  <h1 class="big" style="font-size:22px;margin:0">Tu encaisses combien<br>par mois ?</h1>
+                  <p class="muted" style="font-size:13px;margin:0">En moyenne. Pas besoin d'être précis, on ajustera avec tes vrais chiffres.</p>
+                </div>
+                <div class="col" style="align-items:center;gap:10px;margin-top:6px">
+                  <span class="big lime" style="font-size:42px">3 200 €</span>
+                  <div style="width:100%;position:relative;height:30px;display:flex;align-items:center">
+                    <div class="bar" style="width:100%"><i style="width:42%"></i></div>
+                    <span style="position:absolute;left:calc(42% - 13px);width:26px;height:26px;border-radius:50%;background:var(--lime);box-shadow:0 4px 12px -2px rgba(196,245,66,.6)"></span>
+                  </div>
+                  <div class="between" style="width:100%"><span class="mono muted" style="font-size:9px">0 €</span><span class="mono muted" style="font-size:9px">10 000 €+</span></div>
+                </div>
+                <div class="card row" style="gap:12px;align-items:flex-start;background:rgba(196,245,66,.06);border-color:rgba(196,245,66,.2)">
+                  <span class="karl" style="width:34px;height:34px;flex:none"></span>
+                  <p style="font-size:12.5px;line-height:1.45;margin:0">Ok. À ce rythme, je te réserverais <b class="lime">≈ 787 €/mois</b> de charges. On verra ça ensemble.</p>
+                </div>
+              </div>
+              <div class="col" style="gap:18px">
+                <div class="dots"><i></i><i class="on"></i><i></i></div>
+                <button class="btn">Suivant</button>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag lime" style="margin-right:7px">Freelance</span>2.2 · Revenu moyen</p>
+      </div>
+
+      <!-- Régime de charges -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="justify-content:space-between;padding-top:20px;padding-bottom:22px">
+              <div class="col" style="gap:18px">
+                <div class="col" style="gap:8px">
+                  <h1 class="big" style="font-size:22px;margin:0">Ton régime de charges</h1>
+                  <p class="muted" style="font-size:13px;margin:0">Pour coller au plus juste à ce que tu paieras vraiment.</p>
+                </div>
+                <div class="col" style="gap:11px">
+                  <div class="col" style="gap:8px"><span class="mono muted" style="font-size:9px">Périodicité URSSAF</span><div class="seg"><span>Mensuelle</span><span class="on">Trimestrielle</span></div></div>
+                  <div class="field"><span class="col" style="gap:2px"><span class="val">Versement libératoire</span><span class="lab">Impôt payé avec les cotis'</span></span><span class="row" style="gap:9px"><span class="tag lime">+2,2 %</span><span class="tgl on"></span></span></div>
+                  <div class="field"><span class="col" style="gap:2px"><span class="val">ACRE — 1ʳᵉ année</span><span class="lab">Cotisations réduites</span></span><span class="tgl"></span></div>
+                </div>
+                <div class="card row" style="gap:12px;align-items:flex-start;background:rgba(196,245,66,.06);border-color:rgba(196,245,66,.2)">
+                  <span class="karl" style="width:34px;height:34px;flex:none"></span>
+                  <p style="font-size:12.5px;line-height:1.45;margin:0">Au total je bloque <b class="lime">26,8 %</b> sur chaque rentrée : 24,6 % de cotis' + 2,2 % d'impôt. Réglé. 🤝</p>
+                </div>
+              </div>
+              <div class="col" style="gap:18px">
+                <div class="dots"><i></i><i></i><i class="on"></i></div>
+                <button class="btn">C'est parti</button>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag lime" style="margin-right:7px">Freelance</span>2.3 · Régime de charges</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== ONBOARDING PARTICULIER ===================== -->
+  <section class="group">
+    <div class="ghd"><span class="gnum">03</span><span class="gname">Onboarding · Particulier</span><span class="gdesc">Branche « salarié » : salaire net, jour de versement et dépenses fixes. Mêmes écrans, accent violet, vocabulaire du quotidien.</span></div>
+    <div class="grow">
+
+      <!-- P1 Salaire -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="justify-content:space-between;padding-top:20px;padding-bottom:22px">
+              <div class="col" style="gap:22px">
+                <div class="col" style="gap:8px">
+                  <h1 class="big" style="font-size:22px;margin:0">Ton salaire net,<br>c'est combien ?</h1>
+                  <p class="muted" style="font-size:13px;margin:0">Ce qui tombe vraiment sur ton compte chaque mois.</p>
+                </div>
+                <div class="col" style="align-items:center;gap:10px;margin-top:6px">
+                  <span class="big" style="font-size:42px;color:var(--purple)">2 100 €</span>
+                  <div style="width:100%;position:relative;height:30px;display:flex;align-items:center">
+                    <div class="bar" style="width:100%"><i style="width:38%;background:var(--purple)"></i></div>
+                    <span style="position:absolute;left:calc(38% - 13px);width:26px;height:26px;border-radius:50%;background:var(--purple);box-shadow:0 4px 12px -2px rgba(167,139,250,.6)"></span>
+                  </div>
+                  <div class="between" style="width:100%"><span class="mono muted" style="font-size:9px">0 €</span><span class="mono muted" style="font-size:9px">6 000 €+</span></div>
+                </div>
+                <div class="card row" style="gap:12px;align-items:flex-start;background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.25)">
+                  <span class="karl" style="width:34px;height:34px;flex:none;background:var(--purple)"></span>
+                  <p style="font-size:12.5px;line-height:1.45;margin:0">Ok. Je vais suivre ça de près pour qu'il t'en reste à la fin du mois. 💜</p>
+                </div>
+              </div>
+              <div class="col" style="gap:18px">
+                <div class="dots"><i class="on"></i><i></i><i></i></div>
+                <button class="btn">Suivant</button>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag pur" style="margin-right:7px">Perso</span>3.1 · Salaire net</p>
+      </div>
+
+      <!-- P2 Jour de versement -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="justify-content:space-between;padding-top:20px;padding-bottom:22px">
+              <div class="col" style="gap:20px">
+                <div class="col" style="gap:8px">
+                  <h1 class="big" style="font-size:22px;margin:0">Ton salaire tombe<br>quand ?</h1>
+                  <p class="muted" style="font-size:13px;margin:0">Pour caler ton budget sur ton vrai cycle, pas sur le calendrier.</p>
+                </div>
+                <div class="col" style="align-items:center;gap:14px;margin-top:4px">
+                  <span class="big" style="font-size:44px;color:var(--purple)">Le 27</span>
+                  <div class="row" style="gap:7px">
+                    <span style="width:38px;height:38px;border-radius:12px;background:var(--surf);border:1px solid var(--line);display:grid;place-items:center;font-size:14px;color:var(--muted)">25</span>
+                    <span style="width:38px;height:38px;border-radius:12px;background:var(--surf);border:1px solid var(--line);display:grid;place-items:center;font-size:14px;color:var(--muted)">26</span>
+                    <span style="width:46px;height:46px;border-radius:13px;background:var(--purple);color:#141210;display:grid;place-items:center;font-size:17px;font-weight:700;box-shadow:0 6px 16px -4px rgba(167,139,250,.6)">27</span>
+                    <span style="width:38px;height:38px;border-radius:12px;background:var(--surf);border:1px solid var(--line);display:grid;place-items:center;font-size:14px;color:var(--muted)">28</span>
+                    <span style="width:38px;height:38px;border-radius:12px;background:var(--surf);border:1px solid var(--line);display:grid;place-items:center;font-size:14px;color:var(--muted)">29</span>
+                  </div>
+                </div>
+                <div class="card row" style="gap:12px;align-items:flex-start;background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.25)">
+                  <span class="karl" style="width:34px;height:34px;flex:none;background:var(--purple)"></span>
+                  <p style="font-size:12.5px;line-height:1.45;margin:0">Nickel. Ton mois « argent » ira du <b class="purp">27 au 26</b>. Comme ta vraie vie, quoi.</p>
+                </div>
+              </div>
+              <div class="col" style="gap:18px">
+                <div class="dots"><i></i><i class="on"></i><i></i></div>
+                <button class="btn">Suivant</button>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag pur" style="margin-right:7px">Perso</span>3.2 · Jour de versement</p>
+      </div>
+
+      <!-- P3 Dépenses fixes -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="justify-content:space-between;padding-top:20px;padding-bottom:22px">
+              <div class="col" style="gap:12px">
+                <div class="col" style="gap:8px">
+                  <h1 class="big" style="font-size:22px;margin:0">Tes dépenses fixes ?</h1>
+                  <p class="muted" style="font-size:13px;margin:0">Ce qui part tous les mois, quoi qu'il arrive.</p>
+                </div>
+                <div class="col" style="gap:7px">
+                  <div class="field"><span class="row" style="gap:10px"><span style="font-size:15px">🏠</span><span class="val">Loyer / crédit</span></span><span class="val">720 €</span></div>
+                  <div class="field"><span class="row" style="gap:10px"><span style="font-size:15px">📺</span><span class="val">Abonnements</span></span><span class="val">60 €</span></div>
+                  <div class="field"><span class="row" style="gap:10px"><span style="font-size:15px">🚇</span><span class="val">Transport</span></span><span class="val">90 €</span></div>
+                  <div class="field"><span class="row" style="gap:10px"><span style="font-size:15px">🛡️</span><span class="val">Assurances</span></span><span class="val">45 €</span></div>
+                  <button class="btn ghost" style="height:40px;font-size:13px;gap:6px"><span class="purp" style="font-size:17px">+</span> Ajouter une dépense fixe</button>
+                </div>
+                <div class="card pur row" style="gap:12px;align-items:flex-start">
+                  <span class="karl" style="width:34px;height:34px;flex:none;background:var(--purple)"></span>
+                  <p style="font-size:12.5px;line-height:1.45;margin:0">Total fixe : <b class="purp">915 €/mois</b>. Je le mets de côté dès que ton salaire tombe. Le reste, c'est à toi.</p>
+                </div>
+              </div>
+              <div class="col" style="gap:18px">
+                <div class="dots"><i></i><i></i><i class="on"></i></div>
+                <button class="btn">C'est parti</button>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag pur" style="margin-right:7px">Perso</span>3.3 · Dépenses fixes</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== DASHBOARD ===================== -->
+  <section class="group">
+    <div class="ghd"><span class="gnum">04</span><span class="gname">Dashboard · les deux parcours</span><span class="gdesc">Mêmes composants (hero, jauge, échéance, alerte) — données et libellés différents. Freelance : dispo après charges + URSSAF. Particulier : reste à vivre + objectif d'épargne. Avec l'état vide de chaque côté.</span></div>
+    <div class="grow">
+
+      <!-- Dashboard main -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="gap:14px;padding-top:6px;padding-bottom:16px">
+              <div class="between">
+                <div class="col" style="gap:1px"><span class="muted" style="font-size:12px">Lundi 6 juillet</span><span style="font-weight:700;font-size:19px">Salut Léa 👋</span></div>
+                <span class="karl smug" style="width:40px;height:40px"></span>
+              </div>
+
+              <!-- hero dispo -->
+              <div class="card hi col" style="gap:4px">
+                <span class="mono" style="font-size:10px;opacity:.65">Dispo pour toi, vraiment</span>
+                <span class="big" style="font-size:46px">5 830 €</span>
+                <span style="font-size:12px;opacity:.7;margin-top:2px">après provision de tes charges</span>
+                <div class="row" style="gap:8px;margin-top:12px">
+                  <span style="background:rgba(20,18,16,.12);border-radius:11px;padding:8px 11px;font-size:11px;font-weight:600">Sur le compte&nbsp; <b>8 240 €</b></span>
+                  <span style="background:rgba(20,18,16,.12);border-radius:11px;padding:8px 11px;font-size:11px;font-weight:600">Provisionné&nbsp; <b>2 411 €</b></span>
+                </div>
+              </div>
+
+              <!-- alerte TVA -->
+              <div class="row" style="gap:10px;background:rgba(255,122,77,.12);border:1px solid rgba(255,122,77,.3);border-radius:16px;padding:12px 14px">
+                <span style="font-size:18px">👀</span>
+                <p style="font-size:12px;line-height:1.4;margin:0">Tu approches du <b class="warm">seuil de TVA</b> (36 800 €). Plus que <b>2 100 €</b> avant de devoir la facturer.</p>
+              </div>
+
+              <div class="row" style="gap:14px;align-items:stretch">
+                <!-- gauge -->
+                <div class="card col" style="flex:1;gap:8px;align-items:center;text-align:center;padding:16px">
+                  <span class="mono muted" style="font-size:9px">À mettre de côté</span>
+                  <span class="ring" style="background:conic-gradient(var(--lime) 0 26%,rgba(255,255,255,.10) 26% 100%)"><span class="ring-in"><span class="big" style="font-size:24px">26<span style="font-size:13px">%</span></span></span></span>
+                  <span class="muted" style="font-size:10.5px;line-height:1.35">sur chaque rentrée</span>
+                </div>
+                <!-- echeance -->
+                <div class="card col" style="flex:1;gap:6px;padding:16px;justify-content:space-between">
+                  <div class="between"><span class="mono muted" style="font-size:9px">URSSAF · T2</span><span class="tag lime">J-18</span></div>
+                  <div class="col" style="gap:2px"><span class="big" style="font-size:28px">2 411 €</span><span class="muted" style="font-size:10.5px">échéance 31 juil.</span></div>
+                  <div class="col" style="gap:5px"><div class="bar"><i style="width:100%"></i></div><span class="lime" style="font-size:10px;font-weight:600">Provisionné à 100 % ✅</span></div>
+                </div>
+              </div>
+
+              <!-- quick actions -->
+              <div class="row" style="gap:10px">
+                <button class="btn dark" style="flex:1;height:46px;font-size:13px;gap:6px"><span class="lime" style="font-size:17px">+</span> Revenu</button>
+                <button class="btn dark" style="flex:1;height:46px;font-size:13px;gap:6px"><span class="warm" style="font-size:17px">−</span> Dépense</button>
+              </div>
+              <button class="btn ghost row" style="gap:10px;height:50px;justify-content:flex-start;padding-left:14px"><span class="karl" style="width:30px;height:30px"></span><span style="font-size:13px;font-weight:600">Demander à Karl…</span></button>
+            </div>
+            <div class="tabbar">
+              <div class="tab on"><span class="tico"><span class="ic-home"></span></span>Accueil</div>
+              <div class="tab"><span class="tico"><span class="ic-chat"></span></span>Karl</div>
+              <div class="tab"><span class="fab">+</span></div>
+              <div class="tab"><span class="tico"><span class="ic-bars"><i style="height:7px"></i><i style="height:12px"></i><i style="height:16px"></i></span></span>Projec.</div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag lime" style="margin-right:7px">Freelance</span>4.1 · Dashboard</p>
+      </div>
+
+      <!-- Empty state -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="gap:16px;padding-top:6px;padding-bottom:16px">
+              <div class="between">
+                <div class="col" style="gap:1px"><span class="muted" style="font-size:12px">Bienvenue</span><span style="font-weight:700;font-size:19px">Salut Léa 👋</span></div>
+                <span class="karl" style="width:40px;height:40px"></span>
+              </div>
+
+              <div class="card col" style="gap:16px;align-items:center;text-align:center;padding:26px 20px;background:rgba(196,245,66,.05);border-color:rgba(196,245,66,.18)">
+                <span class="karl float" style="width:78px;height:78px"></span>
+                <p style="font-size:14.5px;line-height:1.5;margin:0;max-width:220px">On commence par du concret. <b>Balance-moi ton premier encaissement</b> et je te dis direct combien mettre de côté.</p>
+              </div>
+
+              <!-- ghosted preview -->
+              <div class="card col" style="gap:4px;opacity:.5">
+                <span class="mono" style="font-size:10px;color:var(--muted)">Dispo pour toi, vraiment</span>
+                <span class="big muted" style="font-size:42px">— €</span>
+                <div class="bar" style="margin-top:8px"><i style="width:0"></i></div>
+              </div>
+
+              <button class="btn row" style="gap:8px"><span style="font-size:18px">+</span> Ajouter mon premier revenu</button>
+              <button class="btn ghost">Importer un relevé</button>
+              <p class="legalline" style="margin-top:2px">Estimations indicatives · pas un conseil réglementé</p>
+            </div>
+            <div class="tabbar">
+              <div class="tab on"><span class="tico"><span class="ic-home"></span></span>Accueil</div>
+              <div class="tab"><span class="tico"><span class="ic-chat"></span></span>Karl</div>
+              <div class="tab"><span class="fab">+</span></div>
+              <div class="tab"><span class="tico"><span class="ic-bars"><i style="height:7px"></i><i style="height:12px"></i><i style="height:16px"></i></span></span>Projec.</div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag lime" style="margin-right:7px">Freelance</span>4.2 · État vide</p>
+      </div>
+
+      <!-- Dashboard PARTICULIER -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="gap:14px;padding-top:6px;padding-bottom:16px">
+              <div class="between">
+                <div class="col" style="gap:1px"><span class="muted" style="font-size:12px">Lundi 12 juillet</span><span class="row" style="gap:8px"><span style="font-weight:700;font-size:19px">Salut Sam 👋</span><span class="tag pur">Perso</span></span></div>
+                <span class="karl smug" style="width:40px;height:40px;background:var(--purple)"></span>
+              </div>
+
+              <div class="card hi col" style="gap:4px">
+                <span class="mono" style="font-size:10px;opacity:.65">Reste à dépenser · ce mois</span>
+                <span class="big" style="font-size:46px">640 €</span>
+                <span style="font-size:12px;opacity:.7;margin-top:2px">jusqu'au 27 juil. · encore 15 jours</span>
+                <div class="row" style="gap:8px;margin-top:12px">
+                  <span style="background:rgba(20,18,16,.12);border-radius:11px;padding:8px 11px;font-size:11px;font-weight:600">Dépensé&nbsp; <b>345 €</b></span>
+                  <span style="background:rgba(20,18,16,.12);border-radius:11px;padding:8px 11px;font-size:11px;font-weight:600">Réservé&nbsp; <b>1 115 €</b></span>
+                </div>
+              </div>
+
+              <div class="row" style="gap:10px;background:rgba(255,122,77,.12);border:1px solid rgba(255,122,77,.3);border-radius:16px;padding:12px 14px">
+                <span style="font-size:18px">👀</span>
+                <p style="font-size:12px;line-height:1.4;margin:0">Budget <b class="warm">Sorties</b> : 80 % cramé et on est le 12. On lève le pied ?</p>
+              </div>
+
+              <div class="row" style="gap:14px;align-items:stretch">
+                <div class="card col" style="flex:1;gap:8px;align-items:center;text-align:center;padding:16px">
+                  <span class="mono muted" style="font-size:9px">Objectif · Vacances 🏝️</span>
+                  <span class="ring" style="background:conic-gradient(var(--purple) 0 62%,rgba(255,255,255,.10) 62% 100%)"><span class="ring-in"><span class="big" style="font-size:24px">62<span style="font-size:13px">%</span></span></span></span>
+                  <span class="muted" style="font-size:10.5px">496 € / 800 €</span>
+                </div>
+                <div class="card col" style="flex:1;gap:6px;padding:16px;justify-content:space-between">
+                  <div class="between"><span class="mono muted" style="font-size:9px">Prélèvements</span><span class="tag pur">J-3</span></div>
+                  <div class="col" style="gap:2px"><span class="big" style="font-size:28px">915 €</span><span class="muted" style="font-size:10.5px">loyer, abos, transport</span></div>
+                  <div class="col" style="gap:5px"><div class="bar"><i style="width:100%;background:var(--purple)"></i></div><span class="purp" style="font-size:10px;font-weight:600">Réservé ✅</span></div>
+                </div>
+              </div>
+
+              <div class="card col" style="gap:12px">
+                <span class="mono muted" style="font-size:9px">Où part ton argent · juillet</span>
+                <div class="col" style="gap:11px">
+                  <div class="col" style="gap:5px"><div class="between"><span style="font-size:12.5px">🛒 Courses</span><span style="font-size:12.5px;font-weight:600">180 €</span></div><div class="bar" style="height:7px"><i style="width:60%;background:var(--purple)"></i></div></div>
+                  <div class="col" style="gap:5px"><div class="between"><span style="font-size:12.5px">🍸 Sorties</span><span class="warm" style="font-size:12.5px;font-weight:600">95 €</span></div><div class="bar" style="height:7px"><i style="width:80%;background:var(--warm)"></i></div></div>
+                  <div class="col" style="gap:5px"><div class="between"><span style="font-size:12.5px">🚇 Transport</span><span style="font-size:12.5px;font-weight:600">45 €</span></div><div class="bar" style="height:7px"><i style="width:50%;background:var(--purple)"></i></div></div>
+                  <div class="col" style="gap:5px"><div class="between"><span style="font-size:12.5px">✨ Divers</span><span style="font-size:12.5px;font-weight:600">25 €</span></div><div class="bar" style="height:7px"><i style="width:40%;background:var(--purple)"></i></div></div>
+                </div>
+              </div>
+
+              <div class="row" style="gap:10px">
+                <button class="btn dark" style="flex:1;height:46px;font-size:13px;gap:6px"><span class="purp" style="font-size:17px">+</span> Entrée</button>
+                <button class="btn dark" style="flex:1;height:46px;font-size:13px;gap:6px"><span class="warm" style="font-size:17px">−</span> Dépense</button>
+              </div>
+              <button class="btn ghost row" style="gap:10px;height:50px;justify-content:flex-start;padding-left:14px"><span class="karl" style="width:30px;height:30px;background:var(--purple)"></span><span style="font-size:13px;font-weight:600">Demander à Karl…</span></button>
+            </div>
+            <div class="tabbar">
+              <div class="tab on"><span class="tico"><span class="ic-home"></span></span>Accueil</div>
+              <div class="tab"><span class="tico"><span class="ic-chat"></span></span>Karl</div>
+              <div class="tab"><span class="fab" style="background:var(--purple);box-shadow:0 8px 20px -6px rgba(167,139,250,.55)">+</span></div>
+              <div class="tab"><span class="tico"><span class="ic-bars"><i style="height:7px"></i><i style="height:12px"></i><i style="height:16px"></i></span></span>Projec.</div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag pur" style="margin-right:7px">Perso</span>4.3 · Dashboard</p>
+      </div>
+
+      <!-- Empty state PARTICULIER -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="gap:16px;padding-top:6px;padding-bottom:16px">
+              <div class="between">
+                <div class="col" style="gap:1px"><span class="muted" style="font-size:12px">Bienvenue</span><span class="row" style="gap:8px"><span style="font-weight:700;font-size:19px">Salut Sam 👋</span><span class="tag pur">Perso</span></span></div>
+                <span class="karl" style="width:40px;height:40px;background:var(--purple)"></span>
+              </div>
+
+              <div class="card col" style="gap:16px;align-items:center;text-align:center;padding:26px 20px;background:rgba(167,139,250,.07);border-color:rgba(167,139,250,.22)">
+                <span class="karl float" style="width:78px;height:78px;background:var(--purple)"></span>
+                <p style="font-size:14.5px;line-height:1.5;margin:0;max-width:220px">On démarre. Dis-moi <b>ce qui tombe et ce qui part</b>, et je te montre ce qu'il te reste vraiment jusqu'à la fin du mois.</p>
+              </div>
+
+              <div class="card col" style="gap:4px;opacity:.5">
+                <span class="mono" style="font-size:10px;color:var(--muted)">Reste à dépenser · ce mois</span>
+                <span class="big muted" style="font-size:42px">— €</span>
+                <div class="bar" style="margin-top:8px"><i style="width:0"></i></div>
+              </div>
+
+              <button class="btn" style="background:var(--purple)">Ajouter mon salaire</button>
+              <button class="btn ghost">Ajouter une dépense</button>
+              <p class="legalline" style="margin-top:2px">Estimations indicatives · pas un conseil réglementé</p>
+            </div>
+            <div class="tabbar">
+              <div class="tab on"><span class="tico"><span class="ic-home"></span></span>Accueil</div>
+              <div class="tab"><span class="tico"><span class="ic-chat"></span></span>Karl</div>
+              <div class="tab"><span class="fab" style="background:var(--purple);box-shadow:0 8px 20px -6px rgba(167,139,250,.55)">+</span></div>
+              <div class="tab"><span class="tico"><span class="ic-bars"><i style="height:7px"></i><i style="height:12px"></i><i style="height:16px"></i></span></span>Projec.</div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag pur" style="margin-right:7px">Perso</span>4.4 · État vide</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== CHAT ===================== -->
+  <section class="group">
+    <div class="ghd"><span class="gnum">05</span><span class="gname">Chat avec Karl · commun</span><span class="gdesc">Même interface SMS pour tout le monde. Seul le vocabulaire change : « clients / trimestre » côté freelance, « salaire / fin de mois » côté particulier.</span></div>
+    <div class="grow">
+
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <!-- chat header -->
+            <div class="row pad between" style="padding-top:4px;padding-bottom:12px;border-bottom:1px solid var(--line)">
+              <div class="row" style="gap:11px">
+                <span class="karl" style="width:40px;height:40px"></span>
+                <div class="col" style="gap:1px">
+                  <span style="font-weight:700;font-size:15px">Karl</span>
+                  <span class="row" style="gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:var(--lime)"></span><span class="muted" style="font-size:11px">cash mais bienveillant</span></span>
+                </div>
+              </div>
+              <span class="pill mono" style="font-size:9px;padding:6px 9px">···</span>
+            </div>
+
+            <div class="scroll pad col" style="gap:9px;padding-top:14px;padding-bottom:8px">
+              <span class="mono muted" style="font-size:9px;text-align:center;margin-bottom:4px">Aujourd'hui</span>
+              <div class="bk">Cette semaine tu as encaissé <b>1 850 €</b>. 👏</div>
+              <div class="bk">J'en garde <b>455 €</b> pour l'URSSAF. Tu peux te verser <b>1 200 €</b> tranquille.</div>
+              <div class="bu">Je peux pas me payer 1 500 plutôt ? 🥺</div>
+              <div class="bk">Tu <b>PEUX</b>. Est-ce que tu <b>DOIS</b> ? 😬<br>Il te reste 18 jours avant l'échéance. Prends les 1 500, et c'est moi qui stresse à ta place.</div>
+              <div class="bu">J'ai claqué 340 € en resto ce mois 🙈</div>
+              <div class="bk">340 balles de resto. J'espère au moins que c'était étoilé. ⭐<br><br>C'est 3 jours de charges, ça. On respire — mais janvier, le resto c'est <i>chez toi</i>. 🍝</div>
+              <div class="typing"><i></i><i></i><i></i></div>
+            </div>
+
+            <!-- suggestions + input -->
+            <div class="col pad" style="gap:9px;padding-top:8px;padding-bottom:12px;border-top:1px solid var(--line)">
+              <div class="row" style="gap:7px;overflow:hidden">
+                <span class="pill" style="white-space:nowrap;font-size:11px">Je peux me payer combien ?</span>
+                <span class="pill" style="white-space:nowrap;font-size:11px">Simule +500 €</span>
+              </div>
+              <div class="row" style="gap:9px">
+                <div class="field" style="flex:1;background:var(--surf2);border-radius:22px;padding:11px 15px"><span class="muted" style="font-size:13px">Écris à Karl…</span></div>
+                <button style="width:44px;height:44px;border-radius:50%;background:var(--lime);border:none;color:#141210;font-size:19px;flex:none;display:grid;place-items:center">↑</button>
+              </div>
+              <p class="legalline">Karl peut se tromper · ce n'est pas un conseil réglementé</p>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag lime" style="margin-right:7px">Freelance</span>5.1 · Conversation</p>
+      </div>
+
+      <!-- chat PARTICULIER -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="row pad between" style="padding-top:4px;padding-bottom:12px;border-bottom:1px solid var(--line)">
+              <div class="row" style="gap:11px">
+                <span class="karl" style="width:40px;height:40px;background:var(--purple)"></span>
+                <div class="col" style="gap:1px">
+                  <span style="font-weight:700;font-size:15px">Karl</span>
+                  <span class="row" style="gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:var(--purple)"></span><span class="muted" style="font-size:11px">cash mais bienveillant</span></span>
+                </div>
+              </div>
+              <span class="pill mono" style="font-size:9px;padding:6px 9px">···</span>
+            </div>
+
+            <div class="scroll pad col" style="gap:9px;padding-top:14px;padding-bottom:8px">
+              <span class="mono muted" style="font-size:9px;text-align:center;margin-bottom:4px">Le 27 · jour de paie</span>
+              <div class="bk">Salaire tombé : <b>2 100 €</b>. 🎉</div>
+              <div class="bk">Je réserve <b>915 €</b> (fixe) + <b>200 €</b> pour tes vacances. Reste <b>985 €</b> pour vivre jusqu'au 27.</div>
+              <div class="bu">J'ai repris un abo salle à 40 €/mois 💪</div>
+              <div class="bk">4ᵉ abo « cette fois je m'y mets ». 😏<br>Ça fait 3 mois que tu paies l'ancien sans y aller. On annule celui-là avant, non ?</div>
+              <div class="bu">3 UberEats cette semaine 🙈</div>
+              <div class="bk">3 UberEats = 47 balles = un plein de courses. 🛒<br>Ton budget sorties est à 80 % et on est le 12. La souris, on la lâche.</div>
+              <div class="typing"><i></i><i></i><i></i></div>
+            </div>
+
+            <div class="col pad" style="gap:9px;padding-top:8px;padding-bottom:12px;border-top:1px solid var(--line)">
+              <div class="row" style="gap:7px;overflow:hidden">
+                <span class="pill" style="white-space:nowrap;font-size:11px">Il me reste combien ?</span>
+                <span class="pill" style="white-space:nowrap;font-size:11px">Mes plus grosses dépenses ?</span>
+              </div>
+              <div class="row" style="gap:9px">
+                <div class="field" style="flex:1;background:var(--surf2);border-radius:22px;padding:11px 15px"><span class="muted" style="font-size:13px">Écris à Karl…</span></div>
+                <button style="width:44px;height:44px;border-radius:50%;background:var(--purple);border:none;color:#141210;font-size:19px;flex:none;display:grid;place-items:center">↑</button>
+              </div>
+              <p class="legalline">Karl peut se tromper · ce n'est pas un conseil réglementé</p>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag pur" style="margin-right:7px">Perso</span>5.2 · Conversation</p>
+      </div>
+
+      <!-- annotated tone card -->
+      <div class="phonewrap" style="max-width:300px;align-self:center">
+        <div class="card pur col" style="gap:16px;width:280px">
+          <span class="tag pur">Ton de marque</span>
+          <p style="font-size:15px;line-height:1.5;margin:0"><b>Comme un pote qui a fait de la compta.</b> Direct, complice, un peu drôle. Jamais moralisateur, jamais condescendant.</p>
+          <div class="divider"></div>
+          <div class="col" style="gap:10px">
+            <div class="row" style="gap:9px"><span class="lime" style="font-size:15px">✓</span><span style="font-size:12.5px">« Tu PEUX. Est-ce que tu DOIS ? »</span></div>
+            <div class="row" style="gap:9px"><span class="lime" style="font-size:15px">✓</span><span style="font-size:12.5px">« C'est 3 jours de charges, ça. »</span></div>
+            <div class="row" style="gap:9px"><span class="warm" style="font-size:15px">✕</span><span class="muted" style="font-size:12.5px">« Vous avez dépassé votre budget mensuel. »</span></div>
+          </div>
+          <p class="muted" style="font-size:11px;line-height:1.4;margin:0">Objectif : donner envie de screenshoter la conv pour la poster.</p>
+        </div>
+        <p class="cap">5.3 · Guide de ton</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== SAISIE ===================== -->
+  <section class="group">
+    <div class="ghd"><span class="gnum">06</span><span class="gname">Saisie · Revenus & dépenses</span><span class="gdesc">Ajout manuel avec preview live de Karl. Les champs s'adaptent : client / TVA côté freelance, marchand / récurrence côté particulier. Connexion bancaire « Bientôt ».</span></div>
+    <div class="grow">
+
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="between pad" style="padding-top:6px;padding-bottom:12px">
+              <span class="muted" style="font-size:20px">✕</span>
+              <span style="font-weight:700;font-size:15px">Ajouter</span>
+              <span class="lime" style="font-size:13px;font-weight:600;opacity:.4">OK</span>
+            </div>
+            <div class="scroll pad col" style="gap:14px;padding-bottom:16px">
+              <div class="seg"><span class="on">Revenu</span><span>Dépense</span></div>
+
+              <div class="col" style="align-items:center;gap:4px;margin:10px 0 4px">
+                <span class="mono muted" style="font-size:9px">Montant encaissé</span>
+                <span class="big lime" style="font-size:42px">1 850 €</span>
+              </div>
+
+              <div class="col" style="gap:9px">
+                <div class="field"><span class="lab">Client / source</span><span class="val">Studio Mörk</span></div>
+                <div class="field"><span class="lab">Catégorie</span><span class="val">Prestation · BNC</span></div>
+                <div class="field"><span class="lab">Date</span><span class="val">7 juil. 2026</span></div>
+                <div class="field"><span class="col" style="gap:2px"><span class="val">Facturé avec TVA</span><span class="lab">Franchise en base</span></span><span class="tgl"></span></div>
+              </div>
+
+              <!-- Karl live preview -->
+              <div class="card row" style="gap:12px;align-items:flex-start;background:rgba(196,245,66,.06);border-color:rgba(196,245,66,.22)">
+                <span class="karl" style="width:36px;height:36px;flex:none"></span>
+                <p style="font-size:12.5px;line-height:1.45;margin:0">Sur ces 1 850 €, je bloque <b class="lime">455 €</b> (24,6 %) pour l'URSSAF. Dispo pour toi : <b class="lime">1 395 €</b>. 🤝</p>
+              </div>
+
+              <!-- future bank connect -->
+              <div class="card between" style="padding:14px 15px">
+                <div class="row" style="gap:12px">
+                  <span style="width:38px;height:38px;border-radius:11px;background:var(--surf3);display:grid;place-items:center;font-size:17px">🏦</span>
+                  <div class="col" style="gap:2px"><span style="font-weight:700;font-size:13px">Connecter mon compte</span><span class="muted" style="font-size:11px">Fini la saisie manuelle</span></div>
+                </div>
+                <span class="tag pur">Bientôt</span>
+              </div>
+
+              <button class="btn">Enregistrer</button>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag lime" style="margin-right:7px">Freelance</span>6.1 · Ajouter un revenu</p>
+      </div>
+
+      <!-- SAISIE PARTICULIER -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="between pad" style="padding-top:6px;padding-bottom:12px">
+              <span class="muted" style="font-size:20px">✕</span>
+              <span style="font-weight:700;font-size:15px">Ajouter</span>
+              <span class="purp" style="font-size:13px;font-weight:600;opacity:.4">OK</span>
+            </div>
+            <div class="scroll pad col" style="gap:14px;padding-bottom:16px">
+              <div class="seg"><span>Entrée</span><span class="on" style="background:var(--purple)">Dépense</span></div>
+
+              <div class="col" style="align-items:center;gap:4px;margin:10px 0 4px">
+                <span class="mono muted" style="font-size:9px">Montant dépensé</span>
+                <span class="big" style="font-size:42px;color:var(--purple)">32 €</span>
+              </div>
+
+              <div class="col" style="gap:9px">
+                <div class="field"><span class="lab">Marchand</span><span class="val">UberEats</span></div>
+                <div class="field"><span class="lab">Catégorie</span><span class="val">🍸 Sorties</span></div>
+                <div class="field"><span class="lab">Date</span><span class="val">12 juil. 2026</span></div>
+                <div class="field"><span class="col" style="gap:2px"><span class="val">Dépense récurrente</span><span class="lab">Tous les mois</span></span><span class="tgl"></span></div>
+              </div>
+
+              <div class="card row" style="gap:12px;align-items:flex-start;background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.25)">
+                <span class="karl" style="width:36px;height:36px;flex:none;background:var(--purple)"></span>
+                <p style="font-size:12.5px;line-height:1.45;margin:0">3ᵉ UberEats cette semaine. 🙈 Ton budget <b class="purp">Sorties</b> est à 80 %. Il te reste <b class="purp">640 €</b> pour 15 jours.</p>
+              </div>
+
+              <div class="card between" style="padding:14px 15px">
+                <div class="row" style="gap:12px">
+                  <span style="width:38px;height:38px;border-radius:11px;background:var(--surf3);display:grid;place-items:center;font-size:17px">🏦</span>
+                  <div class="col" style="gap:2px"><span style="font-weight:700;font-size:13px">Connecter mon compte</span><span class="muted" style="font-size:11px">Catégorisation auto</span></div>
+                </div>
+                <span class="tag pur">Bientôt</span>
+              </div>
+
+              <button class="btn" style="background:var(--purple)">Enregistrer</button>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag pur" style="margin-right:7px">Perso</span>6.2 · Ajouter une dépense</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== PROJECTION ===================== -->
+  <section class="group">
+    <div class="ghd"><span class="gnum">07</span><span class="gname">Projection</span><span class="gdesc">« Si tu continues comme ça… », calée sur l'échéance qui compte : le trimestre côté freelance, la fin de mois côté particulier.</span></div>
+    <div class="grow">
+
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="gap:16px;padding-top:8px;padding-bottom:16px">
+              <div class="col" style="gap:3px"><span class="mono muted" style="font-size:10px">Ta trajectoire</span><h1 class="big" style="font-size:23px;margin:0">Si tu continues comme ça…</h1></div>
+
+              <div class="card hi col" style="gap:2px">
+                <span class="mono" style="font-size:9px;opacity:.65">Dans 3 mois, de côté</span>
+                <span class="big" style="font-size:44px">4 260 €</span>
+                <span style="font-size:12px;opacity:.7">de quoi encaisser T3 les doigts dans le nez</span>
+              </div>
+
+              <!-- chart -->
+              <div class="card col" style="gap:12px">
+                <div class="row between"><span class="mono muted" style="font-size:9px">Épargne cumulée</span><span class="row" style="gap:12px"><span class="row" style="gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:var(--lime)"></span><span style="font-size:10px">Actuel</span></span><span class="row" style="gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:var(--warm)"></span><span style="font-size:10px">Mois creux</span></span></span></div>
+                <div class="row" style="gap:10px;align-items:flex-end;height:120px">
+                  <div class="col" style="flex:1;gap:6px;align-items:center;justify-content:flex-end;height:100%"><div style="width:100%;height:38%;background:var(--lime);border-radius:7px 7px 3px 3px"></div><span class="mono muted" style="font-size:9px">Août</span></div>
+                  <div class="col" style="flex:1;gap:6px;align-items:center;justify-content:flex-end;height:100%"><div style="width:100%;height:64%;background:var(--lime);border-radius:7px 7px 3px 3px"></div><span class="mono muted" style="font-size:9px">Sept</span></div>
+                  <div class="col" style="flex:1;gap:6px;align-items:center;justify-content:flex-end;height:100%"><div class="col" style="width:100%;height:92%;justify-content:flex-end;position:relative"><div style="width:100%;height:70%;background:linear-gradient(180deg,#ff7a4d 0 30%,var(--lime) 30% 100%);border-radius:7px 7px 3px 3px"></div></div><span class="mono muted" style="font-size:9px">Oct</span></div>
+                </div>
+              </div>
+
+              <!-- creux warning -->
+              <div class="card pur row" style="gap:12px;align-items:flex-start;background:rgba(255,122,77,.10);border-color:rgba(255,122,77,.28)">
+                <span class="karl" style="width:34px;height:34px;flex:none;background:var(--warm)"></span>
+                <p style="font-size:12.5px;line-height:1.45;margin:0">Si tu passes un mois creux (−30 %), il te <b class="warm">manquera 480 €</b> pour l'URSSAF de T3. On anticipe maintenant ?</p>
+              </div>
+
+              <div class="field"><span class="col" style="gap:2px"><span class="val">Objectif conseillé</span><span class="lab">pour finir l'année serein</span></span><span class="big lime" style="font-size:20px">850 €<span style="font-size:11px;color:var(--muted)">/mois</span></span></div>
+
+              <p class="legalline">Estimation basée sur tes 3 derniers mois · pas une boule de cristal 🔮</p>
+              <button class="btn ghost">Ajuster mon objectif</button>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag lime" style="margin-right:7px">Freelance</span>7.1 · Projection trimestre</p>
+      </div>
+
+      <!-- PROJECTION PARTICULIER -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="scroll pad col" style="gap:16px;padding-top:8px;padding-bottom:16px">
+              <div class="col" style="gap:3px"><span class="mono muted" style="font-size:10px">Ta fin de mois</span><h1 class="big" style="font-size:23px;margin:0">Si tu continues comme ça…</h1></div>
+
+              <div class="card hi col" style="gap:2px">
+                <span class="mono" style="font-size:9px;opacity:.65">Le 26, il te restera</span>
+                <span class="big" style="font-size:44px">210 €</span>
+                <span style="font-size:12px;opacity:.7">de quoi finir le mois tranquille 🙌</span>
+              </div>
+
+              <div class="card col" style="gap:12px">
+                <div class="row between"><span class="mono muted" style="font-size:9px">Reste à vivre par semaine</span><span class="row" style="gap:12px"><span class="row" style="gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:var(--purple)"></span><span style="font-size:10px">Prévu</span></span><span class="row" style="gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:var(--warm)"></span><span style="font-size:10px">Réel</span></span></span></div>
+                <div class="row" style="gap:9px;align-items:flex-end;height:120px">
+                  <div class="col" style="flex:1;gap:6px;align-items:center;justify-content:flex-end;height:100%"><div style="width:100%;height:70%;background:var(--purple);border-radius:7px 7px 3px 3px"></div><span class="mono muted" style="font-size:9px">S1</span></div>
+                  <div class="col" style="flex:1;gap:6px;align-items:center;justify-content:flex-end;height:100%"><div style="width:100%;height:92%;background:var(--warm);border-radius:7px 7px 3px 3px"></div><span class="mono muted" style="font-size:9px">S2</span></div>
+                  <div class="col" style="flex:1;gap:6px;align-items:center;justify-content:flex-end;height:100%"><div style="width:100%;height:55%;background:var(--purple);opacity:.5;border-radius:7px 7px 3px 3px"></div><span class="mono muted" style="font-size:9px">S3</span></div>
+                  <div class="col" style="flex:1;gap:6px;align-items:center;justify-content:flex-end;height:100%"><div style="width:100%;height:40%;background:var(--purple);opacity:.5;border-radius:7px 7px 3px 3px"></div><span class="mono muted" style="font-size:9px">S4</span></div>
+                </div>
+              </div>
+
+              <div class="card pur row" style="gap:12px;align-items:flex-start;background:rgba(255,122,77,.10);border-color:rgba(255,122,77,.28)">
+                <span class="karl" style="width:34px;height:34px;flex:none;background:var(--warm)"></span>
+                <p style="font-size:12.5px;line-height:1.45;margin:0">Au rythme de la semaine 2, tu finis <b class="warm">−120 €</b> dans le rouge. Cale 30 €/semaine sur les sorties et c'est bon.</p>
+              </div>
+
+              <div class="field"><span class="col" style="gap:2px"><span class="val">Épargne conseillée</span><span class="lab">pour ton objectif vacances</span></span><span class="big" style="font-size:20px;color:var(--purple)">200 €<span style="font-size:11px;color:var(--muted)">/mois</span></span></div>
+
+              <p class="legalline">Estimation basée sur tes 3 derniers mois · pas une boule de cristal 🔮</p>
+              <button class="btn ghost">Ajuster mon budget</button>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag pur" style="margin-right:7px">Perso</span>7.2 · Projection fin de mois</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== PAYWALL ===================== -->
+  <section class="group">
+    <div class="ghd"><span class="gnum">08</span><span class="gname">Paywall · Karl Pro</span><span class="gdesc">Écran à part, pensé pour convertir sans agresser. La limite gratuite est présentée avec le ton de Karl plutôt qu'un mur brutal.</span></div>
+    <div class="grow">
+
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="between pad" style="padding-top:6px;padding-bottom:6px"><span></span><span class="muted" style="font-size:20px">✕</span></div>
+            <div class="scroll pad col" style="gap:14px;padding-bottom:16px">
+              <div class="col" style="align-items:center;gap:12px;text-align:center;margin-top:2px">
+                <span class="karl smug" style="width:66px;height:66px"></span>
+                <div class="col" style="gap:5px">
+                  <span class="row" style="gap:8px;justify-content:center"><h1 class="big" style="font-size:28px;margin:0">Karl</h1><span class="tag lime" style="font-size:11px;padding:5px 9px">PRO</span></span>
+                  <p style="font-size:13.5px;line-height:1.45;margin:0;max-width:230px">Tu m'as posé <b>5 questions</b> cette semaine. Il t'en reste <b class="warm">0</b>. Freelance ou salarié, l'illimité c'est mieux. 😏</p>
+                </div>
+              </div>
+
+              <!-- compare -->
+              <div class="card col" style="gap:11px;padding:16px">
+                <div class="row between" style="padding-bottom:9px;border-bottom:1px solid var(--line)"><span class="mono muted" style="font-size:9px">Ce que tu débloques</span><span class="row" style="gap:16px"><span class="mono muted" style="font-size:9px">Free</span><span class="mono lime" style="font-size:9px">Pro</span></span></div>
+                <div class="row between"><span style="font-size:12.5px">Coach Karl</span><span class="row" style="gap:18px"><span class="muted" style="font-size:11px">5/sem</span><span class="lime" style="font-size:13px">∞</span></span></div>
+                <div class="row between"><span style="font-size:12.5px">Projections avancées</span><span class="row" style="gap:18px"><span class="muted">–</span><span class="lime" style="font-size:13px">✓</span></span></div>
+                <div class="row between"><span style="font-size:12.5px">Alertes perso (URSSAF, budgets, objectifs)</span><span class="row" style="gap:18px"><span class="muted">–</span><span class="lime" style="font-size:13px">✓</span></span></div>
+                <div class="row between"><span style="font-size:12.5px">Export comptable</span><span class="row" style="gap:18px"><span class="muted">–</span><span class="lime" style="font-size:13px">✓</span></span></div>
+                <div class="row between"><span style="font-size:12.5px">Freelance + perso, une seule app</span><span class="row" style="gap:18px"><span class="muted">–</span><span class="lime" style="font-size:13px">✓</span></span></div>
+              </div>
+
+              <!-- price -->
+              <div class="row" style="gap:10px;align-items:stretch">
+                <div class="card col" style="flex:1;gap:2px;padding:14px"><span class="mono muted" style="font-size:9px">Mensuel</span><span class="big" style="font-size:22px">5,99 €</span><span class="muted" style="font-size:10px">/ mois</span></div>
+                <div class="card col" style="flex:1;gap:2px;padding:14px;background:rgba(196,245,66,.08);border-color:var(--lime);position:relative"><span class="tag lime" style="position:absolute;top:-9px;right:12px;font-size:8px">1 MOIS OFFERT</span><span class="mono lime" style="font-size:9px">Annuel</span><span class="big" style="font-size:22px">3,99 €</span><span class="muted" style="font-size:10px">/ mois · 47,90 €/an</span></div>
+              </div>
+
+              <button class="btn">Essayer 7 jours gratuits</button>
+              <p class="muted" style="font-size:11px;text-align:center;margin:0">Sans engagement. Annule quand tu veux.</p>
+              <p class="legalline">Karl n'est pas un conseiller financier réglementé · les estimations sont indicatives</p>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap">8.1 · Paywall · parle aux deux</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== SHARE ===================== -->
+  <section class="group">
+    <div class="ghd"><span class="gnum">09</span><span class="gname">Carte de partage</span><span class="gdesc">Format story 9:16 pour TikTok / Instagram, déclinable pour les deux profils. Gros chiffre, punchline, signature Karl.</span></div>
+    <div class="grow">
+
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="pad col" style="gap:14px;padding-top:6px;flex:1">
+              <div class="between"><span class="muted" style="font-size:20px">✕</span><span style="font-weight:700;font-size:14px">Ta story</span><span class="lime" style="font-size:18px">↻</span></div>
+
+              <!-- the shareable card -->
+              <div class="col" style="flex:1;border-radius:26px;overflow:hidden;position:relative;background:radial-gradient(120% 90% at 20% 0%,#e6ff6b,#a9e232 60%,#8fce16);color:#141210;padding:26px 22px;justify-content:space-between">
+                <div class="between"><span class="row" style="gap:8px"><span class="karl smug" style="width:30px;height:30px;background:#141210"></span><span class="mono" style="font-size:11px;font-weight:700">KARL</span></span><span class="mono" style="font-size:9px;opacity:.6">2026</span></div>
+                <div class="col" style="gap:8px">
+                  <span class="mono" style="font-size:10px;opacity:.7">Cette année, j'ai mis de côté</span>
+                  <span class="big" style="font-size:62px;line-height:.85;white-space:nowrap">6 300 €</span>
+                  <p style="font-size:17px;font-weight:700;line-height:1.25;margin:6px 0 0">Mon URSSAF ne me fait plus flipper. 💅</p>
+                </div>
+                <div class="row between" style="align-items:flex-end">
+                  <span style="font-size:12px;font-weight:600;opacity:.75">…et toi, tu provisionnes<br>ou tu pries ?</span>
+                  <span style="background:#141210;color:var(--lime);font-family:'Space Mono',monospace;font-size:9px;font-weight:700;padding:6px 10px;border-radius:20px">coach-karl.app</span>
+                </div>
+                <div style="position:absolute;bottom:-30px;right:-20px;width:120px;height:120px;border-radius:50%;border:14px solid rgba(20,18,16,.06)"></div>
+              </div>
+
+              <!-- share actions -->
+              <div class="row" style="gap:10px;justify-content:center;padding-bottom:2px">
+                <div class="col" style="align-items:center;gap:6px"><span style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#feda75,#d62976,#962fbf);display:grid;place-items:center;font-size:22px">📷</span><span class="mono muted" style="font-size:8px">Story</span></div>
+                <div class="col" style="align-items:center;gap:6px"><span style="width:52px;height:52px;border-radius:16px;background:#111;border:1px solid var(--line);display:grid;place-items:center;font-size:20px">🎵</span><span class="mono muted" style="font-size:8px">TikTok</span></div>
+                <div class="col" style="align-items:center;gap:6px"><span style="width:52px;height:52px;border-radius:16px;background:var(--surf2);display:grid;place-items:center;font-size:20px">⬇</span><span class="mono muted" style="font-size:8px">Enreg.</span></div>
+                <div class="col" style="align-items:center;gap:6px"><span style="width:52px;height:52px;border-radius:16px;background:var(--surf2);display:grid;place-items:center;font-size:20px">🔗</span><span class="mono muted" style="font-size:8px">Lien</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag lime" style="margin-right:7px">Freelance</span>9.1 · Carte à screenshoter</p>
+      </div>
+
+      <!-- SHARE PARTICULIER -->
+      <div class="phonewrap">
+        <div class="phone"><div class="screen">
+          <div class="island"></div>
+          <div class="statusbar"><span>9:41</span><span class="sbr"><span class="mono" style="font-size:9px">5G</span><span class="bat"></span></span></div>
+          <div class="body">
+            <div class="pad col" style="gap:14px;padding-top:6px;flex:1">
+              <div class="between"><span class="muted" style="font-size:20px">✕</span><span style="font-weight:700;font-size:14px">Ta story</span><span class="purp" style="font-size:18px">↻</span></div>
+
+              <div class="col" style="flex:1;border-radius:26px;overflow:hidden;position:relative;background:radial-gradient(120% 90% at 20% 0%,#c4aeffff,#a78bfa 55%,#8b6df0);color:#141210;padding:26px 22px;justify-content:space-between">
+                <div class="between"><span class="row" style="gap:8px"><span class="karl smug" style="width:30px;height:30px;background:#141210"></span><span class="mono" style="font-size:11px;font-weight:700">KARL</span></span><span class="mono" style="font-size:9px;opacity:.6">JUIL. 2026</span></div>
+                <div class="col" style="gap:8px">
+                  <span class="mono" style="font-size:10px;opacity:.7">Ce mois, j'ai pas fini dans le rouge</span>
+                  <span class="big" style="font-size:58px;line-height:.85;white-space:nowrap">+210 €</span>
+                  <p style="font-size:17px;font-weight:700;line-height:1.25;margin:6px 0 0">Et 496 € de côté pour les vacances. 🏝️</p>
+                </div>
+                <div class="row between" style="align-items:flex-end">
+                  <span style="font-size:12px;font-weight:600;opacity:.75">…et toi, ta fin de mois<br>elle ressemble à quoi ?</span>
+                  <span style="background:#141210;color:var(--purple);font-family:'Space Mono',monospace;font-size:9px;font-weight:700;padding:6px 10px;border-radius:20px">coach-karl.app</span>
+                </div>
+                <div style="position:absolute;bottom:-30px;right:-20px;width:120px;height:120px;border-radius:50%;border:14px solid rgba(20,18,16,.06)"></div>
+              </div>
+
+              <div class="row" style="gap:10px;justify-content:center;padding-bottom:2px">
+                <div class="col" style="align-items:center;gap:6px"><span style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#feda75,#d62976,#962fbf);display:grid;place-items:center;font-size:22px">📷</span><span class="mono muted" style="font-size:8px">Story</span></div>
+                <div class="col" style="align-items:center;gap:6px"><span style="width:52px;height:52px;border-radius:16px;background:#111;border:1px solid var(--line);display:grid;place-items:center;font-size:20px">🎵</span><span class="mono muted" style="font-size:8px">TikTok</span></div>
+                <div class="col" style="align-items:center;gap:6px"><span style="width:52px;height:52px;border-radius:16px;background:var(--surf2);display:grid;place-items:center;font-size:20px">⬇</span><span class="mono muted" style="font-size:8px">Enreg.</span></div>
+                <div class="col" style="align-items:center;gap:6px"><span style="width:52px;height:52px;border-radius:16px;background:var(--surf2);display:grid;place-items:center;font-size:20px">🔗</span><span class="mono muted" style="font-size:8px">Lien</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div></div>
+        <p class="cap"><span class="tag pur" style="margin-right:7px">Perso</span>9.2 · Carte à screenshoter</p>
+      </div>
+
+      <!-- share variants note -->
+      <div class="phonewrap" style="max-width:300px;align-self:center">
+        <div class="card col" style="gap:14px;width:280px">
+          <span class="tag pur">Déclinaisons · 2 profils</span>
+          <p style="font-size:14px;line-height:1.5;margin:0">La même carte se génère automatiquement, quel que soit ton profil :</p>
+          <div class="col" style="gap:9px">
+            <div class="pill" style="justify-content:flex-start;font-size:12px"><span class="tag lime" style="margin-right:2px">Free</span>« J'ai survécu à ma 1ʳᵉ URSSAF »</div>
+            <div class="pill" style="justify-content:flex-start;font-size:12px"><span class="tag pur" style="margin-right:2px">Perso</span>« Karl m'a stoppé avant le 4ᵉ abo »</div>
+            <div class="pill" style="justify-content:flex-start;font-size:12px"><span class="tag pur" style="margin-right:2px">Perso</span>« Objectif vacances : 62 % ✅ »</div>
+          </div>
+          <p class="muted" style="font-size:11px;line-height:1.4;margin:0">Chaque carte = un mini-format viral, brandé Karl, prêt à reposter.</p>
+        </div>
+        <p class="cap">9.3 · Variantes générées</p>
+      </div>
+
+    </div>
+  </section>
+</div>
+</x-dc>
+</body>
+</html>
