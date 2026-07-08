@@ -11,7 +11,7 @@ const FREE_LIMIT = 20;
 const TOOLS: Anthropic.Tool[] = [
   {
     name: "ajouter_transaction",
-    description: "Propose d'enregistrer une transaction financière. Le système demandera confirmation avant insertion réelle.",
+    description: "Propose d'enregistrer une transaction financière UNIQUEMENT quand l'utilisateur a fourni un montant explicite. Le système demandera confirmation avant insertion réelle.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -56,6 +56,7 @@ const SYSTEM_PROMPT = `Tu es Karl, un coach financier personnel. Tu es direct, c
 Règles impératives :
 - N'invente JAMAIS de chiffres. Utilise toujours les tools pour obtenir des données réelles.
 - Appelle ajouter_transaction UNIQUEMENT pour une transaction nouvelle dans le message actuel de l'utilisateur — jamais pour une transaction déjà présente dans l'historique.
+- N'appelle JAMAIS ajouter_transaction si l'utilisateur n'a pas fourni de montant explicite (chiffre) dans la conversation. Si le montant est absent ou ambigu, pose la question en texte pur et attends la réponse — ne devine et n'invente jamais un prix.
 - Sois concis. Réponds comme dans un SMS, pas un email. Maximum 3-4 phrases.
 - Tu peux utiliser des emojis avec parcimonie.
 - Si l'historique contient un message utilisateur "✅ Confirmé" suivi de ton accusé de réception (ex : "c'est noté", "enregistré"), la transaction est DÉFINITIVEMENT clôturée. Ne la ré-enregistre jamais, ne redemande jamais de confirmation. Un "non" ou "non merci" posté après cet échange répond à ta question la plus récente — pas à la transaction passée.`;
@@ -184,6 +185,19 @@ Deno.serve(async (req: Request) => {
       const { id: toolUseId, name: toolName, input } = toolUseBlock;
 
       if (toolName === "ajouter_transaction") {
+        const txInput = input as { montant: number; categorie: string; type: string; description?: string };
+
+        // Guard: if the montant doesn't appear in any user message, Claude hallucinated it.
+        // Return the text block Claude already emitted (e.g. "c'était combien ?") as a
+        // plain message so no confirmation card is shown.
+        if (!montantMentionnedByUser(txInput.montant, message, history)) {
+          const clarifyText =
+            response.content.find((b: any) => b.type === "text")?.text ??
+            `C'était combien exactement ? Je vais pas inventer le prix 😅`;
+          await saveAndIncrementUsage(supabase, userId, monthStart, message, clarifyText);
+          return jsonResponse({ type: "message", message: clarifyText });
+        }
+
         // Feed "awaiting confirmation" so Claude writes a confirmation question
         const confirmMessages: Anthropic.MessageParam[] = [
           ...messages,
@@ -260,6 +274,23 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Erreur interne. Réessaie dans un instant. 🛠️" }, 500);
   }
 });
+
+// Returns true if the user explicitly stated a number matching `montant` anywhere
+// in the conversation (current message + history). Catches hallucinated amounts
+// like calling ajouter_transaction({montant: 1.20}) when the user only said
+// "j'ai mangé un pain au chocolat" without giving a price.
+function montantMentionnedByUser(
+  montant: number,
+  currentMessage: string,
+  history: { role: string; content: string }[]
+): boolean {
+  const userTexts = [
+    currentMessage,
+    ...history.filter((h) => h.role === "user").map((h) => h.content),
+  ].join(" ");
+  const numbers = userTexts.match(/\d+([.,]\d+)?/g) ?? [];
+  return numbers.some((n) => Math.abs(parseFloat(n.replace(",", ".")) - montant) < 0.01);
+}
 
 async function executeTool(
   supabase: ReturnType<typeof createClient>,

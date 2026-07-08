@@ -93,6 +93,7 @@ export default function ChatScreen() {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState<PendingTransaction | null>(null);
+  const [editedMontant, setEditedMontant] = useState('');
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
@@ -140,7 +141,11 @@ export default function ChatScreen() {
         setTimeout(() => router.push('/paywall'), 1500);
       } else if (result.type === 'pending_confirmation') {
         addMessage('karl', result.message);
-        setPendingTransaction(result.pending ?? null);
+        const pending = result.pending ?? null;
+        setPendingTransaction(pending);
+        if (pending) {
+          setEditedMontant(String(pending.montant).replace('.', ','));
+        }
       } else {
         addMessage('karl', result.message);
       }
@@ -152,10 +157,12 @@ export default function ChatScreen() {
   }
 
   async function confirmTransaction() {
-    if (!pendingTransaction || isLoading) return;
+    const parsedMontant = parseFloat(editedMontant.replace(',', '.'));
+    if (!pendingTransaction || isLoading || isNaN(parsedMontant) || parsedMontant <= 0) return;
     setError(null);
-    const tx = pendingTransaction;
+    const tx = { ...pendingTransaction, montant: parsedMontant };
     setPendingTransaction(null);
+    setEditedMontant('');
     setIsLoading(true);
 
     try {
@@ -179,8 +186,14 @@ export default function ChatScreen() {
 
   function cancelTransaction() {
     setPendingTransaction(null);
+    setEditedMontant('');
     addMessage('karl', "Pas de souci, on n'enregistre rien. 👍");
   }
+
+  const isValidMontant = (() => {
+    const v = parseFloat(editedMontant.replace(',', '.'));
+    return !isNaN(v) && v > 0;
+  })();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -232,15 +245,28 @@ export default function ChatScreen() {
         {/* Input area */}
         <View style={styles.inputArea}>
           {pendingTransaction ? (
-            /* Confirmation UI */
+            /* Confirmation UI — amount is editable in case Karl was slightly off */
             <View style={styles.confirmBlock}>
-              <Text style={styles.confirmLabel}>
-                {pendingTransaction.montant}€ · {pendingTransaction.categorie} · {pendingTransaction.type}
-              </Text>
+              <View style={styles.confirmAmountRow}>
+                <TextInput
+                  style={styles.confirmAmountInput}
+                  value={editedMontant}
+                  onChangeText={setEditedMontant}
+                  keyboardType="decimal-pad"
+                  selectTextOnFocus
+                />
+                <Text style={styles.confirmMeta}>
+                  {'€ · '}{pendingTransaction.categorie}{' · '}{pendingTransaction.type}
+                </Text>
+              </View>
               <View style={styles.confirmButtons}>
                 <Pressable
-                  style={[styles.confirmBtn, { backgroundColor: accent }]}
+                  style={[
+                    styles.confirmBtn,
+                    { backgroundColor: accent, opacity: isValidMontant ? 1 : 0.4 },
+                  ]}
                   onPress={confirmTransaction}
+                  disabled={!isValidMontant}
                 >
                   <Text style={[styles.confirmBtnText, { color: C.dark }]}>✅ Confirmer</Text>
                 </Pressable>
@@ -400,11 +426,27 @@ const styles = StyleSheet.create({
   sendArrow: { fontSize: 19, color: C.dark, fontFamily: 'Sora_700Bold' },
 
   confirmBlock: { gap: 10 },
-  confirmLabel: {
+  confirmAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  confirmAmountInput: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 14,
+    color: C.text,
+    borderBottomWidth: 1,
+    borderBottomColor: C.muted,
+    minWidth: 52,
+    textAlign: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  confirmMeta: {
     fontFamily: 'SpaceMono_400Regular',
     fontSize: 11,
     color: C.muted,
-    textAlign: 'center',
     letterSpacing: 0.5,
   },
   confirmButtons: { flexDirection: 'row', gap: 10 },
