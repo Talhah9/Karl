@@ -55,9 +55,10 @@ const SYSTEM_PROMPT = `Tu es Karl, un coach financier personnel. Tu es direct, c
 
 Règles impératives :
 - N'invente JAMAIS de chiffres. Utilise toujours les tools pour obtenir des données réelles.
-- Pour toute transaction mentionnée par l'utilisateur, appelle le tool ajouter_transaction — le système gèrera la confirmation.
+- Appelle ajouter_transaction UNIQUEMENT pour une transaction nouvelle dans le message actuel de l'utilisateur — jamais pour une transaction déjà présente dans l'historique.
 - Sois concis. Réponds comme dans un SMS, pas un email. Maximum 3-4 phrases.
-- Tu peux utiliser des emojis avec parcimonie.`;
+- Tu peux utiliser des emojis avec parcimonie.
+- Si l'historique contient un message utilisateur "✅ Confirmé" suivi de ton accusé de réception (ex : "c'est noté", "enregistré"), la transaction est DÉFINITIVEMENT clôturée. Ne la ré-enregistre jamais, ne redemande jamais de confirmation. Un "non" ou "non merci" posté après cet échange répond à ta question la plus récente — pas à la transaction passée.`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,7 +112,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // --- Confirmed transaction: execute then get ack ---
+    // --- Confirmed transaction: insert then ack with full context ---
     if (confirmed_transaction) {
       const { montant, categorie, type, description } = confirmed_transaction;
       await supabase.from("transactions").insert({
@@ -124,14 +125,26 @@ Deno.serve(async (req: Request) => {
       });
 
       const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+      // Pass the conversation history so Claude has full context for the ack.
+      // The [TRANSACTION_INSÉRÉE] marker tells Claude the insertion is done;
+      // it only appears in this internal call, not in the chat history sent back.
+      const recentHistory = history.slice(-10);
+      const ackMessages: Anthropic.MessageParam[] = [
+        ...recentHistory.map((h) => ({
+          role: h.role as "user" | "assistant",
+          content: h.content,
+        })),
+        {
+          role: "user" as const,
+          content: `[TRANSACTION_INSÉRÉE : ${montant}€ - ${categorie} - ${type}${description ? ` (${description})` : ""}] Accuse réception en une phrase courte et relance la conversation.`,
+        },
+      ];
+
       const ackResponse = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 150,
         system: SYSTEM_PROMPT,
-        messages: [{
-          role: "user",
-          content: `[SYSTÈME] Transaction enregistrée : ${montant}€ en ${categorie} (${type}). Confirme-le à l'utilisateur en une phrase courte et relance la conversation.`,
-        }],
+        messages: ackMessages,
       });
 
       const ackText = ackResponse.content.find((b: any) => b.type === "text")?.text

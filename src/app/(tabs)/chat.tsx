@@ -164,6 +164,11 @@ export default function ChatScreen() {
         history: buildHistory(),
         confirmed_transaction: tx,
       });
+      // Add both messages after the API call so future buildHistory() calls
+      // produce a valid alternating sequence: the "✅ Confirmé" user message
+      // anchors the confirmation in history and prevents Claude from treating
+      // a subsequent "non" as a rejection of the already-inserted transaction.
+      addMessage('user', '✅ Confirmé');
       addMessage('karl', result.message);
     } catch (err: any) {
       setError(err.message ?? 'Erreur lors de l\'enregistrement.');
