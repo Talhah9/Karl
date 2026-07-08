@@ -1,5 +1,7 @@
+import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -14,55 +16,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { KarlMascot } from '@/components/ui/KarlMascot';
 import { C } from '@/constants/colors';
 import { useApp } from '@/context/AppContext';
+import { supabase } from '@/lib/supabase';
 
-type Message = { id: string; from: 'karl' | 'user'; text: string };
+type MessageFrom = 'karl' | 'user';
+type Message = { id: string; from: MessageFrom; text: string };
 
-const MOCK_FREELANCE: Message[] = [
-  { id: '1', from: 'karl', text: 'Cette semaine tu as encaissé **1 850 €**. 👏' },
-  {
-    id: '2',
-    from: 'karl',
-    text: "J'en garde **455 €** pour l'URSSAF. Tu peux te verser **1 200 €** tranquille.",
-  },
-  { id: '3', from: 'user', text: 'Je peux pas me payer 1 500 plutôt ? 🥺' },
-  {
-    id: '4',
-    from: 'karl',
-    text: "Tu **PEUX**. Est-ce que tu **DOIS** ? 😬\nIl te reste 18 jours avant l'échéance. Prends les 1 500, et c'est moi qui stresse à ta place.",
-  },
-  { id: '5', from: 'user', text: "J'ai claqué 340 € en resto ce mois 🙈" },
-  {
-    id: '6',
-    from: 'karl',
-    text: "340 balles de resto. J'espère au moins que c'était étoilé. ⭐\n\nC'est 3 jours de charges, ça. On respire — mais janvier, le resto c'est *chez toi*. 🍝",
-  },
-];
+type PendingTransaction = {
+  montant: number;
+  categorie: string;
+  type: 'depense' | 'revenu';
+  description?: string;
+};
 
-const MOCK_PERSO: Message[] = [
-  { id: '1', from: 'karl', text: 'Salaire tombé : **2 100 €**. 🎉' },
-  {
-    id: '2',
-    from: 'karl',
-    text: "Je réserve **915 €** (fixe) + **200 €** pour tes vacances. Reste **985 €** pour vivre jusqu'au 27.",
-  },
-  { id: '3', from: 'user', text: "J'ai repris un abo salle à 40 €/mois 💪" },
-  {
-    id: '4',
-    from: 'karl',
-    text: "4ᵉ abo « cette fois je m'y mets ». 😏\nÇa fait 3 mois que tu paies l'ancien sans y aller. On annule celui-là avant, non ?",
-  },
-  { id: '5', from: 'user', text: '3 UberEats cette semaine 🙈' },
-  {
-    id: '6',
-    from: 'karl',
-    text: "3 UberEats = 47 balles = un plein de courses. 🛒\nTon budget sorties est à 80 % et on est le 12. La souris, on la lâche.",
-  },
-];
+const SUGGESTIONS_FREELANCE = ['Je peux me payer combien ?', 'Mes dernières dépenses', 'J\'ai encaissé 500€'];
+const SUGGESTIONS_PERSO = ['Il me reste combien ?', 'Mes plus grosses dépenses', 'J\'ai dépensé 40€ en resto'];
 
-const SUGGESTIONS_FREELANCE = ['Je peux me payer combien ?', 'Simule +500 €'];
-const SUGGESTIONS_PERSO = ['Il me reste combien ?', 'Mes plus grosses dépenses ?'];
-
-function renderText(text: string, fromUser: boolean) {
+function renderText(text: string) {
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return parts.map((p, i) => {
     if (p.startsWith('**') && p.endsWith('**')) {
@@ -79,45 +48,133 @@ function renderText(text: string, fromUser: boolean) {
 function Bubble({ msg, accent }: { msg: Message; accent: string }) {
   const isKarl = msg.from === 'karl';
   return (
-    <View style={[styles.bubble, isKarl ? styles.bubbleKarl : [styles.bubbleUser, { backgroundColor: accent }]]}>
+    <View
+      style={[
+        styles.bubble,
+        isKarl
+          ? styles.bubbleKarl
+          : [styles.bubbleUser, { backgroundColor: accent }],
+      ]}
+    >
       <Text
         style={[
           styles.bubbleText,
-          isKarl
-            ? styles.bubbleTextKarl
-            : [styles.bubbleTextUser, { color: C.dark }],
+          isKarl ? styles.bubbleTextKarl : [styles.bubbleTextUser, { color: C.dark }],
         ]}
       >
-        {renderText(msg.text, !isKarl)}
+        {renderText(msg.text)}
       </Text>
     </View>
   );
 }
 
+function TypingBubble() {
+  return (
+    <View style={[styles.bubble, styles.bubbleKarl]}>
+      <ActivityIndicator size="small" color={C.muted} />
+    </View>
+  );
+}
+
 export default function ChatScreen() {
-  const { profile } = useApp();
+  const { profile, authReady } = useApp();
   const accent = profile === 'perso' ? C.purple : C.lime;
-  const messages = profile === 'perso' ? MOCK_PERSO : MOCK_FREELANCE;
   const suggestions = profile === 'perso' ? SUGGESTIONS_PERSO : SUGGESTIONS_FREELANCE;
-  const dateLabel = profile === 'perso' ? 'Le 27 · jour de paie' : "Aujourd'hui";
 
   const [text, setText] = useState('');
-  const [msgs, setMsgs] = useState<Message[]>(messages);
+  const [msgs, setMsgs] = useState<Message[]>([
+    {
+      id: '0',
+      from: 'karl',
+      text: profile === 'perso'
+        ? "Salut 👋 Je suis Karl, ton coach financier. Dis-moi ce que tu veux savoir sur ton argent."
+        : "Salut 👋 Je suis Karl. Pose-moi une question sur ta tréso, ou dis-moi ce que tu as encaissé/dépensé.",
+    },
+  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState<PendingTransaction | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
-  function send() {
-    if (!text.trim()) return;
-    const newMsg: Message = { id: String(Date.now()), from: 'user', text };
-    setMsgs((prev) => [...prev, newMsg]);
+  function buildHistory(): { role: 'user' | 'assistant'; content: string }[] {
+    return msgs
+      .filter((m) => m.from === 'karl' || m.from === 'user')
+      .map((m) => ({
+        role: m.from === 'karl' ? ('assistant' as const) : ('user' as const),
+        content: m.text,
+      }));
+  }
+
+  function addMessage(from: MessageFrom, text: string): string {
+    const id = String(Date.now() + Math.random());
+    setMsgs((prev) => [...prev, { id, from, text }]);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    return id;
+  }
+
+  async function callKarlChat(body: object): Promise<{ type: string; message: string; pending?: PendingTransaction }> {
+    const { data, error: fnError } = await supabase.functions.invoke('karl-chat', { body });
+    if (fnError) throw new Error(fnError.message);
+    if (!data) throw new Error('Réponse vide');
+    return data as any;
+  }
+
+  async function send() {
+    const trimmed = text.trim();
+    if (!trimmed || isLoading) return;
+    if (!authReady) {
+      setError("Connexion en cours, réessaie dans un instant.");
+      return;
+    }
+
+    setError(null);
     setText('');
-    setTimeout(() => {
-      const reply: Message = {
-        id: String(Date.now() + 1),
-        from: 'karl',
-        text: '…je réfléchis 🤔',
-      };
-      setMsgs((prev) => [...prev, reply]);
-    }, 800);
+    addMessage('user', trimmed);
+    setIsLoading(true);
+
+    try {
+      const result = await callKarlChat({ message: trimmed, history: buildHistory() });
+
+      if (result.type === 'paywall') {
+        addMessage('karl', result.message);
+        setTimeout(() => router.push('/paywall'), 1500);
+      } else if (result.type === 'pending_confirmation') {
+        addMessage('karl', result.message);
+        setPendingTransaction(result.pending ?? null);
+      } else {
+        addMessage('karl', result.message);
+      }
+    } catch (err: any) {
+      setError(err.message ?? 'Erreur réseau. Réessaie.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function confirmTransaction() {
+    if (!pendingTransaction || isLoading) return;
+    setError(null);
+    const tx = pendingTransaction;
+    setPendingTransaction(null);
+    setIsLoading(true);
+
+    try {
+      const result = await callKarlChat({
+        message: 'confirmé',
+        history: buildHistory(),
+        confirmed_transaction: tx,
+      });
+      addMessage('karl', result.message);
+    } catch (err: any) {
+      setError(err.message ?? 'Erreur lors de l\'enregistrement.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function cancelTransaction() {
+    setPendingTransaction(null);
+    addMessage('karl', "Pas de souci, on n'enregistre rien. 👍");
   }
 
   return (
@@ -129,8 +186,10 @@ export default function ChatScreen() {
           <View>
             <Text style={styles.karlName}>Karl</Text>
             <View style={styles.statusRow}>
-              <View style={[styles.statusDot, { backgroundColor: accent }]} />
-              <Text style={styles.statusText}>cash mais bienveillant</Text>
+              <View style={[styles.statusDot, { backgroundColor: authReady ? accent : C.muted }]} />
+              <Text style={styles.statusText}>
+                {authReady ? 'cash mais bienveillant' : 'connexion…'}
+              </Text>
             </View>
           </View>
         </View>
@@ -151,38 +210,79 @@ export default function ChatScreen() {
           keyExtractor={(m) => m.id}
           contentContainerStyle={styles.msgList}
           ListHeaderComponent={
-            <Text style={styles.dateLabel}>{dateLabel}</Text>
+            <Text style={styles.dateLabel}>Aujourd'hui</Text>
           }
+          ListFooterComponent={isLoading ? <TypingBubble /> : null}
           renderItem={({ item }) => <Bubble msg={item} accent={accent} />}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         />
 
+        {/* Error banner */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
         {/* Input area */}
         <View style={styles.inputArea}>
-          <View style={styles.suggestionsRow}>
-            {suggestions.map((s) => (
-              <Pressable key={s} style={styles.suggestionPill} onPress={() => setText(s)}>
-                <Text style={styles.suggestionText}>{s}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="Écris à Karl…"
-              placeholderTextColor={C.muted}
-              value={text}
-              onChangeText={setText}
-              onSubmitEditing={send}
-              returnKeyType="send"
-            />
-            <Pressable
-              style={[styles.sendBtn, { backgroundColor: accent }]}
-              onPress={send}
-            >
-              <Text style={styles.sendArrow}>↑</Text>
-            </Pressable>
-          </View>
+          {pendingTransaction ? (
+            /* Confirmation UI */
+            <View style={styles.confirmBlock}>
+              <Text style={styles.confirmLabel}>
+                {pendingTransaction.montant}€ · {pendingTransaction.categorie} · {pendingTransaction.type}
+              </Text>
+              <View style={styles.confirmButtons}>
+                <Pressable
+                  style={[styles.confirmBtn, { backgroundColor: accent }]}
+                  onPress={confirmTransaction}
+                >
+                  <Text style={[styles.confirmBtnText, { color: C.dark }]}>✅ Confirmer</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.confirmBtn, styles.confirmBtnCancel]}
+                  onPress={cancelTransaction}
+                >
+                  <Text style={styles.confirmBtnText}>❌ Annuler</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <>
+              <View style={styles.suggestionsRow}>
+                {suggestions.map((s) => (
+                  <Pressable
+                    key={s}
+                    style={styles.suggestionPill}
+                    onPress={() => {
+                      setText(s);
+                    }}
+                  >
+                    <Text style={styles.suggestionText}>{s}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Écris à Karl…"
+                  placeholderTextColor={C.muted}
+                  value={text}
+                  onChangeText={setText}
+                  onSubmitEditing={send}
+                  returnKeyType="send"
+                  editable={!isLoading}
+                />
+                <Pressable
+                  style={[styles.sendBtn, { backgroundColor: isLoading ? C.muted : accent }]}
+                  onPress={send}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.sendArrow}>↑</Text>
+                </Pressable>
+              </View>
+            </>
+          )}
           <Text style={styles.legal}>Karl peut se tromper · ce n'est pas un conseil réglementé</Text>
         </View>
       </KeyboardAvoidingView>
@@ -215,11 +315,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
   },
-  pillText: {
-    fontFamily: 'SpaceMono_400Regular',
-    fontSize: 9,
-    color: C.text,
-  },
+  pillText: { fontFamily: 'SpaceMono_400Regular', fontSize: 9, color: C.text },
 
   msgList: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8, gap: 9 },
   dateLabel: {
@@ -245,20 +341,20 @@ const styles = StyleSheet.create({
   bubbleUser: {
     alignSelf: 'flex-end',
     borderBottomRightRadius: 6,
-    // backgroundColor applied inline with accent color
   },
-  bubbleText: {
-    fontSize: 13,
-    lineHeight: 18,
+  bubbleText: { fontSize: 13, lineHeight: 18 },
+  bubbleTextKarl: { fontFamily: 'Sora_400Regular', color: C.text },
+  bubbleTextUser: { fontFamily: 'Sora_600SemiBold' },
+
+  errorBanner: {
+    marginHorizontal: 20,
+    marginBottom: 6,
+    backgroundColor: 'rgba(255,80,80,0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
   },
-  bubbleTextKarl: {
-    fontFamily: 'Sora_400Regular',
-    color: C.text,
-  },
-  bubbleTextUser: {
-    fontFamily: 'Sora_600SemiBold',
-    color: C.dark,
-  },
+  errorText: { fontFamily: 'Sora_400Regular', fontSize: 12, color: '#ff5050' },
 
   inputArea: {
     paddingHorizontal: 20,
@@ -296,11 +392,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendArrow: {
-    fontSize: 19,
-    color: C.dark,
-    fontFamily: 'Sora_700Bold',
+  sendArrow: { fontSize: 19, color: C.dark, fontFamily: 'Sora_700Bold' },
+
+  confirmBlock: { gap: 10 },
+  confirmLabel: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 11,
+    color: C.muted,
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
+  confirmButtons: { flexDirection: 'row', gap: 10 },
+  confirmBtn: {
+    flex: 1,
+    borderRadius: 22,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  confirmBtnCancel: {
+    backgroundColor: C.surf2,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  confirmBtnText: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 13,
+    color: C.text,
+  },
+
   legal: {
     fontFamily: 'SpaceMono_400Regular',
     fontSize: 9,

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 
 export type UserProfile = 'freelance' | 'perso' | null;
 
@@ -29,6 +30,7 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
+  authReady: boolean;
   setProfile: (p: UserProfile) => void;
   setUserName: (n: string) => void;
   setFreelanceSetup: (s: Partial<FreelanceSetup>) => void;
@@ -63,6 +65,7 @@ const defaultState: AppState = {
 
 const AppContext = createContext<AppContextType>({
   ...defaultState,
+  authReady: false,
   setProfile: () => {},
   setUserName: () => {},
   setFreelanceSetup: () => {},
@@ -76,6 +79,7 @@ const STORAGE_KEY = '@karl_app_state';
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(defaultState);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
@@ -84,6 +88,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setState({ ...defaultState, ...JSON.parse(raw) });
         } catch {}
       }
+    });
+  }, []);
+
+  // Initialize anonymous Supabase auth so Edge Functions can be called with a JWT
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) {
+        await supabase.auth.signInAnonymously();
+      }
+      setAuthReady(true);
     });
   }, []);
 
@@ -133,6 +147,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         ...state,
+        authReady,
         setProfile,
         setUserName,
         setFreelanceSetup,

@@ -9,7 +9,8 @@
       "Bash(mkdir -p \"C:\\\\Users\\\\gazou\\\\Desktop\\\\bilan-app\\\\src\\\\app\\\\onboarding\\\\freelance\")",
       "Bash(mkdir -p \"C:\\\\Users\\\\gazou\\\\Desktop\\\\bilan-app\\\\src\\\\app\\\\onboarding\\\\perso\")",
       "Bash(mkdir -p \"C:\\\\Users\\\\gazou\\\\Desktop\\\\bilan-app\\\\src\\\\app\\\\\\(tabs\\)\")",
-      "Bash(powershell -Command \"\\(Get-Content 'src/app/\\(tabs\\)/index.tsx'\\) -replace \\\\\"router\\\\.push\\\\\\('/add'\\\\\\)\\\\\", \\\\\"router.push\\('/\\(tabs\\)/add'\\)\\\\\" -replace \\\\\"router\\\\.push\\\\\\('/chat'\\\\\\)\\\\\", \\\\\"router.push\\('/\\(tabs\\)/chat'\\)\\\\\" | Set-Content 'src/app/\\(tabs\\)/index.tsx'\")"
+      "Bash(powershell -Command \"\\(Get-Content 'src/app/\\(tabs\\)/index.tsx'\\) -replace \\\\\"router\\\\.push\\\\\\('/add'\\\\\\)\\\\\", \\\\\"router.push\\('/\\(tabs\\)/add'\\)\\\\\" -replace \\\\\"router\\\\.push\\\\\\('/chat'\\\\\\)\\\\\", \\\\\"router.push\\('/\\(tabs\\)/chat'\\)\\\\\" | Set-Content 'src/app/\\(tabs\\)/index.tsx'\")",
+      "mcp__claude_ai_Supabase__apply_migration"
     ]
   }
 }
