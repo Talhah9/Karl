@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { PanResponder, StyleSheet, View, ViewStyle } from 'react-native';
 import { C } from '@/constants/colors';
 
@@ -14,6 +14,12 @@ interface SliderProps {
   thumbTintColor?: string;
 }
 
+function clampStep(raw: number, min: number, max: number, step: number) {
+  const clamped = Math.max(min, Math.min(max, raw));
+  const stepped = Math.round((clamped - min) / step) * step + min;
+  return Math.round(stepped * 100) / 100;
+}
+
 export function Slider({
   minimumValue = 0,
   maximumValue = 100,
@@ -25,12 +31,17 @@ export function Slider({
   thumbTintColor = C.lime,
 }: SliderProps) {
   const trackWidth = useRef(0);
+  const trackX = useRef(0);
+  const viewRef = useRef<View>(null);
 
-  function clampToStep(raw: number) {
-    const clamped = Math.max(minimumValue, Math.min(maximumValue, raw));
-    const stepped = Math.round((clamped - minimumValue) / step) * step + minimumValue;
-    return Math.round(stepped * 100) / 100;
-  }
+  // Keep refs up-to-date so the PanResponder (created once) always uses latest values
+  const cbRef = useRef(onValueChange);
+  useEffect(() => { cbRef.current = onValueChange; }, [onValueChange]);
+
+  const propsRef = useRef({ minimumValue, maximumValue, step });
+  useEffect(() => {
+    propsRef.current = { minimumValue, maximumValue, step };
+  }, [minimumValue, maximumValue, step]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -38,15 +49,17 @@ export function Slider({
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
         if (trackWidth.current === 0) return;
-        const x = e.nativeEvent.locationX;
+        const { minimumValue: min, maximumValue: max, step: s } = propsRef.current;
+        const x = e.nativeEvent.pageX - trackX.current;
         const pct = Math.max(0, Math.min(1, x / trackWidth.current));
-        onValueChange(clampToStep(minimumValue + pct * (maximumValue - minimumValue)));
+        cbRef.current(clampStep(min + pct * (max - min), min, max, s));
       },
       onPanResponderMove: (e) => {
         if (trackWidth.current === 0) return;
-        const x = e.nativeEvent.locationX;
+        const { minimumValue: min, maximumValue: max, step: s } = propsRef.current;
+        const x = e.nativeEvent.pageX - trackX.current;
         const pct = Math.max(0, Math.min(1, x / trackWidth.current));
-        onValueChange(clampToStep(minimumValue + pct * (maximumValue - minimumValue)));
+        cbRef.current(clampStep(min + pct * (max - min), min, max, s));
       },
     })
   ).current;
@@ -55,10 +68,14 @@ export function Slider({
 
   return (
     <View
+      ref={viewRef}
       style={styles.wrapper}
       {...panResponder.panHandlers}
       onLayout={(e) => {
         trackWidth.current = e.nativeEvent.layout.width;
+        viewRef.current?.measure((_fx, _fy, _w, _h, px) => {
+          trackX.current = px;
+        });
       }}
     >
       {/* Track */}

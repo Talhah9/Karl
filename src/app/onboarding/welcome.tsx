@@ -7,8 +7,22 @@ import { Button } from '@/components/ui/Button';
 import { KarlMascot } from '@/components/ui/KarlMascot';
 import { OnboardingDots } from '@/components/ui/OnboardingDots';
 import { C } from '@/constants/colors';
+import { useApp } from '@/context/AppContext';
+
+const COPY = {
+  freelance: {
+    body: "Je calcule ce que tu peux vraiment te payer et je mets tes charges de côté. Fini le stress avant chaque échéance.",
+    accent: C.lime,
+  },
+  perso: {
+    body: "Je suis ton budget au jour le jour et je te dis ce qu'il te reste vraiment pour finir le mois sans te prendre la tête.",
+    accent: C.purple,
+  },
+};
 
 export default function WelcomeScreen() {
+  const { profile } = useApp();
+  const copy = COPY[profile ?? 'freelance'];
   const floatAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -33,25 +47,24 @@ export default function WelcomeScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        {/* Top — Karl + text */}
-        <View style={styles.hero}>
+        {/* Centre — Karl flottant + texte */}
+        <View style={styles.heroWrap}>
           <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
-            <KarlMascot size={96} />
+            <KarlMascot size={96} color={copy.accent} />
           </Animated.View>
           <View style={styles.textBlock}>
             <Text style={styles.title}>Salut.{'\n'}Moi c'est Karl.</Text>
-            <Text style={styles.body}>
-              Je calcule ce que tu peux{' '}
-              <Text style={styles.bold}>vraiment</Text> te payer. Sans te
-              faire flipper à l'URSSAF.
-            </Text>
+            <Text style={styles.body}>{copy.body}</Text>
           </View>
         </View>
 
-        {/* Bottom — dots + CTA */}
+        {/* Bas — dots + CTA */}
         <View style={styles.footer}>
-          <OnboardingDots total={3} current={0} />
-          <Button onPress={() => router.push('/onboarding/how-it-works')}>
+          <OnboardingDots total={3} current={1} />
+          <Button
+            onPress={() => router.push('/onboarding/how-it-works')}
+            accentColor={copy.accent}
+          >
             Ça m'intéresse
           </Button>
           <Text style={styles.legal}>
@@ -72,10 +85,11 @@ const styles = StyleSheet.create({
     paddingBottom: 22,
     justifyContent: 'space-between',
   },
-  hero: {
+  heroWrap: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 18,
-    marginTop: 26,
   },
   textBlock: {
     alignItems: 'center',

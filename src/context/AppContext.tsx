@@ -27,6 +27,7 @@ interface AppState {
   freelanceSetup: FreelanceSetup;
   persoSetup: PersoSetup;
   hasData: boolean;
+  tutorialDone: boolean;
 }
 
 interface AppContextType extends AppState {
@@ -37,6 +38,7 @@ interface AppContextType extends AppState {
   setPersoSetup: (s: Partial<PersoSetup>) => void;
   completeOnboarding: () => void;
   setHasData: (v: boolean) => void;
+  setTutorialDone: (v: boolean) => void;
   reset: () => void;
 }
 
@@ -61,6 +63,7 @@ const defaultState: AppState = {
   freelanceSetup: defaultFreelanceSetup,
   persoSetup: defaultPersoSetup,
   hasData: false,
+  tutorialDone: false,
 };
 
 const AppContext = createContext<AppContextType>({
@@ -72,6 +75,7 @@ const AppContext = createContext<AppContextType>({
   setPersoSetup: () => {},
   completeOnboarding: () => {},
   setHasData: () => {},
+  setTutorialDone: () => {},
   reset: () => {},
 });
 
@@ -138,6 +142,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [state, save]
   );
 
+  const setTutorialDone = useCallback(
+    (tutorialDone: boolean) => save({ ...state, tutorialDone }),
+    [state, save]
+  );
+
   const reset = useCallback(() => {
     AsyncStorage.removeItem(STORAGE_KEY);
     setState(defaultState);
@@ -154,6 +163,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setPersoSetup,
         completeOnboarding,
         setHasData,
+        setTutorialDone,
         reset,
       }}
     >

@@ -7,28 +7,58 @@ import { Card } from '@/components/ui/Card';
 import { KarlMascot } from '@/components/ui/KarlMascot';
 import { OnboardingDots } from '@/components/ui/OnboardingDots';
 import { C } from '@/constants/colors';
+import { useApp } from '@/context/AppContext';
 
-const features = [
+const FEATURES_FREELANCE = [
   {
-    icon: null,
     ring: true,
     title: 'Je mets tes charges de côté',
-    desc: "Avant que tu les dépenses. L'URSSAF ne te surprendra plus.",
+    desc: "Avant que tu les dépenses. L'URSSAF ne te surprendra plus jamais.",
   },
   {
     icon: '€',
     title: 'Je te dis combien te verser',
-    desc: 'Chaque semaine, un montant que tu peux prendre sans culpabiliser.',
+    desc: 'Un montant que tu peux prendre sans culpabiliser, à chaque encaissement.',
   },
   {
-    icon: null,
     karl: true,
     title: 'Zéro jargon',
     desc: 'Je parle comme un pote qui a fait de la compta. Pas comme ta banque.',
   },
 ];
 
+const FEATURES_PERSO = [
+  {
+    icon: '📅',
+    title: 'Je suis ton budget au jour le jour',
+    desc: "Tu sais toujours ce qu'il te reste vraiment, pas juste ce qui est sur le compte.",
+  },
+  {
+    icon: '🎯',
+    title: 'Tes objectifs, pas juste tes dettes',
+    desc: "Vacances, épargne, gros achat — je t'aide à y arriver sans te serrer la ceinture en permanence.",
+  },
+  {
+    karl: true,
+    title: 'Zéro jargon',
+    desc: 'Je parle comme un pote. Pas de tableau, pas de comptabilité — juste ce que tu dois savoir.',
+  },
+];
+
 export default function HowItWorksScreen() {
+  const { profile } = useApp();
+  const isPerso = profile === 'perso';
+  const features = isPerso ? FEATURES_PERSO : FEATURES_FREELANCE;
+  const accent = isPerso ? C.purple : C.lime;
+
+  function handleContinue() {
+    if (profile === 'perso') {
+      router.push('/onboarding/perso/salary');
+    } else {
+      router.push('/onboarding/freelance/status');
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
@@ -39,7 +69,7 @@ export default function HowItWorksScreen() {
               <Card key={i} style={styles.featureCard}>
                 <View style={styles.featureRow}>
                   {f.ring && (
-                    <View style={styles.iconRing}>
+                    <View style={[styles.iconRing, { backgroundColor: accent }]}>
                       <Text style={styles.iconRingText}>%</Text>
                     </View>
                   )}
@@ -48,7 +78,7 @@ export default function HowItWorksScreen() {
                       <Text style={styles.iconBoxText}>{f.icon}</Text>
                     </View>
                   )}
-                  {f.karl && <KarlMascot size={38} />}
+                  {f.karl && <KarlMascot size={38} color={accent} />}
                   <View style={styles.featureText}>
                     <Text style={styles.featureTitle}>{f.title}</Text>
                     <Text style={styles.featureDesc}>{f.desc}</Text>
@@ -60,9 +90,9 @@ export default function HowItWorksScreen() {
         </View>
 
         <View style={styles.footer}>
-          <OnboardingDots total={3} current={1} />
-          <Button onPress={() => router.push('/onboarding/profile')}>
-            Continuer
+          <OnboardingDots total={3} current={2} />
+          <Button onPress={handleContinue} accentColor={accent}>
+            C'est parti
           </Button>
         </View>
       </View>

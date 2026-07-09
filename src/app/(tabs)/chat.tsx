@@ -137,7 +137,7 @@ export default function ChatScreen() {
     setIsLoading(true);
 
     try {
-      const result = await callKarlChat({ message: trimmed, history: buildHistory() });
+      const result = await callKarlChat({ message: trimmed, history: buildHistory(), profile });
 
       if (result.type === 'paywall') {
         addMessage('karl', result.message);
@@ -181,6 +181,7 @@ export default function ChatScreen() {
         const result = await callKarlChat({
           message: 'confirmé',
           history: buildHistory(),
+          profile,
           confirmed_transaction: { ...action, montant: parsedMontant },
         });
         addMessage('user', '✅ Confirmé');
@@ -197,6 +198,7 @@ export default function ChatScreen() {
         const result = await callKarlChat({
           message: 'confirmé',
           history: buildHistory(),
+          profile,
           confirmed_modification: {
             id: action.id,
             montant: resolvedMontant,
@@ -212,6 +214,7 @@ export default function ChatScreen() {
         const result = await callKarlChat({
           message: 'confirmé',
           history: buildHistory(),
+          profile,
           confirmed_deletion: { id: action.id },
         });
         addMessage('user', '🗑️ Supprimé');

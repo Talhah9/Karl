@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Slider } from '@/components/ui/Slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,6 +18,26 @@ function fmt(n: number) {
 export default function SalaryScreen() {
   const { persoSetup, setPersoSetup } = useApp();
   const [salary, setSalary] = useState(persoSetup.netSalary);
+  const [inputText, setInputText] = useState(String(persoSetup.netSalary));
+
+  function handleSlider(v: number) {
+    setSalary(v);
+    setInputText(String(v));
+  }
+
+  function handleTextChange(t: string) {
+    const digits = t.replace(/[^0-9]/g, '');
+    setInputText(digits);
+    const n = parseInt(digits, 10);
+    if (!isNaN(n) && n >= 0 && n <= 6000) setSalary(n);
+  }
+
+  function handleTextBlur() {
+    const n = parseInt(inputText, 10);
+    const clamped = isNaN(n) ? salary : Math.max(0, Math.min(6000, n));
+    setSalary(clamped);
+    setInputText(String(clamped));
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -30,6 +50,19 @@ export default function SalaryScreen() {
 
           <View style={styles.sliderBlock}>
             <Text style={styles.bigAmount}>{fmt(salary)}</Text>
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.manualInput}
+                value={inputText}
+                onChangeText={handleTextChange}
+                onBlur={handleTextBlur}
+                keyboardType="numeric"
+                selectTextOnFocus
+                maxLength={4}
+                placeholderTextColor={C.muted}
+              />
+              <Text style={styles.inputUnit}>€</Text>
+            </View>
             <View style={styles.sliderWrap}>
               <Slider
                 style={{ width: '100%', height: 30 }}
@@ -37,7 +70,7 @@ export default function SalaryScreen() {
                 maximumValue={6000}
                 step={50}
                 value={salary}
-                onValueChange={setSalary}
+                onValueChange={handleSlider}
                 minimumTrackTintColor={C.purple}
                 maximumTrackTintColor="rgba(255,255,255,0.10)"
                 thumbTintColor={C.purple}
@@ -95,6 +128,30 @@ const styles = StyleSheet.create({
   },
   sub: { fontFamily: 'Sora_400Regular', fontSize: 13, color: C.muted },
   sliderBlock: { alignItems: 'center', gap: 10, marginTop: 6 },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(167,139,250,0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(167,139,250,0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  manualInput: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 16,
+    color: C.text,
+    minWidth: 60,
+    textAlign: 'right',
+    padding: 0,
+  },
+  inputUnit: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 14,
+    color: C.purple,
+  },
   bigAmount: {
     fontFamily: 'Sora_800ExtraBold',
     fontSize: 42,
