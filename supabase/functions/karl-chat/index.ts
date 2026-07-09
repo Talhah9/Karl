@@ -77,9 +77,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
-const SYSTEM_PROMPT = `Tu es Karl, un coach financier personnel. Tu es direct, cash, légèrement sarcastique mais toujours bienveillant. Tu parles en français, de façon décontractée (pas de vouvoiement).
-
-Règles impératives :
+const COMMON_RULES = `Règles impératives :
 - N'invente JAMAIS de chiffres. Utilise toujours les tools pour obtenir des données réelles.
 - Appelle ajouter_transaction UNIQUEMENT pour une transaction nouvelle dans le message actuel de l'utilisateur — jamais pour une transaction déjà présente dans l'historique.
 - N'appelle JAMAIS ajouter_transaction si l'utilisateur n'a pas fourni de montant explicite (chiffre) dans la conversation. Si le montant est absent ou ambigu, pose la question en texte pur et attends la réponse — ne devine et n'invente jamais un prix.
@@ -88,6 +86,31 @@ Règles impératives :
 - Sois concis. Réponds comme dans un SMS, pas un email. Maximum 3-4 phrases.
 - Tu peux utiliser des emojis avec parcimonie.
 - Si l'historique contient "✅ Confirmé" ou "🗑️ Supprimé" suivi de ton accusé de réception : cette opération est DÉFINITIVEMENT clôturée. Ne la ré-exécute JAMAIS. Et surtout : ne génère AUCUN commentaire sur cette clôture ("Attends, ça a déjà été confirmé", "la transaction est déjà enregistrée", etc.). Réponds au message actuel normalement, comme si la transaction passée n'existait plus.`;
+
+function buildSystemPrompt(profile: string): string {
+  if (profile === "perso") {
+    return `Tu es Karl, un coach budgétaire personnel. Tu es direct, cash, légèrement sarcastique mais toujours bienveillant. Tu parles en français, de façon décontractée (pas de vouvoiement).
+
+Tu parles à un(e) salarié(e) / particulier(ère). Adapte ton vocabulaire au quotidien :
+- Utilise : budget du mois, dépenses, salaire, économies, fin de mois, il reste X€, prélèvements, loyer, abonnements, objectif épargne, courses, sorties
+- N'utilise JAMAIS : URSSAF, TVA, charges sociales, trimestre fiscal, encaisser une facture, te verser un salaire, provision de charges, BNC, BIC, auto-entrepreneur, trésorerie d'entreprise
+
+${COMMON_RULES}`;
+  }
+
+  return `Tu es Karl, un coach financier pour entrepreneurs et freelances. Tu es direct, cash, légèrement sarcastique mais toujours bienveillant. Tu parles en français, de façon décontractée (pas de vouvoiement).
+
+Tu parles à un(e) entrepreneur(e) / freelance. Vocabulaire adapté :
+- Utilise librement : tréso, encaissé, charges, URSSAF, TVA, trimestre, ce que tu peux te verser, provision, auto-entrepreneur, BNC, BIC, revenu d'activité
+- Évite le vocabulaire purement salarié (salaire fixe mensuel, ton employeur, ta fiche de paie)
+
+${COMMON_RULES}`;
+}
+
+// Extracts meaningful keywords (≥3 chars, letters only) from a string
+function extractKeywords(text: string): string[] {
+  return (text.toLowerCase().match(/\b[a-zA-ZÀ-ÿ]{3,}\b/g) ?? []).slice(0, 25);
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,11 +140,13 @@ Deno.serve(async (req: Request) => {
     const body = await req.json() as {
       message: string;
       history: { role: string; content: string }[];
+      profile?: string;
       confirmed_transaction?: { montant: number; categorie: string; type: string; description?: string };
       confirmed_modification?: { id: string; montant: number; categorie: string; type: string; description?: string };
       confirmed_deletion?: { id: string };
     };
-    const { message, history = [], confirmed_transaction, confirmed_modification, confirmed_deletion } = body;
+    const { message, history = [], profile = "freelance", confirmed_transaction, confirmed_modification, confirmed_deletion } = body;
+    const systemPrompt = buildSystemPrompt(profile);
 
     // --- Rate limiting ---
     const now = new Date();
@@ -155,10 +180,22 @@ Deno.serve(async (req: Request) => {
         date: now.toISOString().split("T")[0],
       });
 
+      // Feature 4: learn keyword → category associations from the description
+      if (description) {
+        const keywords = extractKeywords(description).slice(0, 5);
+        if (keywords.length > 0) {
+          await supabase.from("categories_apprises").upsert(
+            keywords.map((mot_cle) => ({ user_id: userId, mot_cle, categorie })),
+            { onConflict: "user_id,mot_cle" }
+          );
+        }
+      }
+
       const ackText = await ackWithContext(
         history,
         `[TRANSACTION_INSÉRÉE : ${montant}€ - ${categorie} - ${type}${description ? ` (${description})` : ""}] Accuse réception en une phrase courte et relance la conversation.`,
-        `${montant}€ en ${categorie} — enregistré. ✅`
+        `${montant}€ en ${categorie} — enregistré. ✅`,
+        systemPrompt
       );
       await saveAndIncrementUsage(supabase, userId, monthStart, message || "confirmation", ackText);
       return jsonResponse({ type: "message", message: ackText });
@@ -176,7 +213,8 @@ Deno.serve(async (req: Request) => {
       const ackText = await ackWithContext(
         history,
         `[TRANSACTION_MODIFIÉE : ${montant}€ - ${categorie} - ${type}] Accuse réception en une phrase courte.`,
-        `Transaction modifiée : ${montant}€ en ${categorie}. ✅`
+        `Transaction modifiée : ${montant}€ en ${categorie}. ✅`,
+        systemPrompt
       );
       await saveAndIncrementUsage(supabase, userId, monthStart, message || "modification", ackText);
       return jsonResponse({ type: "message", message: ackText });
@@ -194,10 +232,31 @@ Deno.serve(async (req: Request) => {
       const ackText = await ackWithContext(
         history,
         `[TRANSACTION_SUPPRIMÉE] Accuse réception en une phrase courte.`,
-        `Transaction supprimée. ✅`
+        `Transaction supprimée. ✅`,
+        systemPrompt
       );
       await saveAndIncrementUsage(supabase, userId, monthStart, message || "suppression", ackText);
       return jsonResponse({ type: "message", message: ackText });
+    }
+
+    // --- Feature 4: inject learned categories into system prompt ---
+    let effectiveSystemPrompt = systemPrompt;
+    const msgKeywords = extractKeywords(message);
+    if (msgKeywords.length > 0) {
+      const { data: learned } = await supabase
+        .from("categories_apprises")
+        .select("mot_cle, categorie")
+        .eq("user_id", userId)
+        .in("mot_cle", msgKeywords);
+
+      if (learned && (learned as any[]).length > 0) {
+        const hints = (learned as any[])
+          .map((r: any) => `"${r.mot_cle}" → catégorie "${r.categorie}"`)
+          .join(", ");
+        effectiveSystemPrompt =
+          systemPrompt +
+          `\n\nCatégories mémorisées pour cet utilisateur (utilise-les automatiquement, sans demander) : ${hints}.`;
+      }
     }
 
     // --- Normal chat flow ---
@@ -215,7 +274,7 @@ Deno.serve(async (req: Request) => {
     let response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: effectiveSystemPrompt,
       tools: TOOLS,
       messages,
     });
@@ -250,7 +309,8 @@ Deno.serve(async (req: Request) => {
             status: "awaiting_confirmation",
             note: "L'utilisateur doit confirmer avant l'enregistrement. Pose la question de confirmation en une phrase courte et précise. Ne dis pas que c'est déjà enregistré.",
           },
-          `Tu veux que j'enregistre ${txInput.montant}€ en ${txInput.categorie} ?`
+          `Tu veux que j'enregistre ${txInput.montant}€ en ${txInput.categorie} ?`,
+          effectiveSystemPrompt
         );
 
         await saveAndIncrementUsage(supabase, userId, monthStart, message, confirmText);
@@ -287,7 +347,7 @@ Deno.serve(async (req: Request) => {
           response = await anthropic.messages.create({
             model: "claude-sonnet-4-6",
             max_tokens: 300,
-            system: SYSTEM_PROMPT,
+            system: effectiveSystemPrompt,
             tools: TOOLS,
             messages,
           });
@@ -312,7 +372,8 @@ Deno.serve(async (req: Request) => {
             changes,
             note: "Montre les changements et pose la question de confirmation en une phrase. Ne dis pas que la modification est déjà faite.",
           },
-          `Tu veux modifier cette transaction ?`
+          `Tu veux modifier cette transaction ?`,
+          effectiveSystemPrompt
         );
 
         await saveAndIncrementUsage(supabase, userId, monthStart, message, confirmText);
@@ -354,7 +415,7 @@ Deno.serve(async (req: Request) => {
           response = await anthropic.messages.create({
             model: "claude-sonnet-4-6",
             max_tokens: 300,
-            system: SYSTEM_PROMPT,
+            system: effectiveSystemPrompt,
             tools: TOOLS,
             messages,
           });
@@ -372,7 +433,8 @@ Deno.serve(async (req: Request) => {
             transaction: ex,
             note: "Demande confirmation de suppression en une phrase. Ne dis PAS que la suppression est déjà faite.",
           },
-          `Tu veux supprimer cette transaction ?`
+          `Tu veux supprimer cette transaction ?`,
+          effectiveSystemPrompt
         );
 
         await saveAndIncrementUsage(supabase, userId, monthStart, message, confirmText);
@@ -414,7 +476,7 @@ Deno.serve(async (req: Request) => {
       response = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+        system: effectiveSystemPrompt,
         tools: TOOLS,
         messages,
       });
@@ -439,7 +501,8 @@ async function getConfirmationText(
   assistantContent: Anthropic.ContentBlock[],
   toolUseId: string,
   toolResultContent: unknown,
-  fallback: string
+  fallback: string,
+  systemPrompt: string
 ): Promise<string> {
   const confirmMessages: Anthropic.MessageParam[] = [
     ...messages,
@@ -457,7 +520,7 @@ async function getConfirmationText(
   const confirmResponse = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 200,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     messages: confirmMessages,
   });
 
@@ -468,7 +531,8 @@ async function getConfirmationText(
 async function ackWithContext(
   history: { role: string; content: string }[],
   prompt: string,
-  fallback: string
+  fallback: string,
+  systemPrompt: string
 ): Promise<string> {
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   const recentHistory = history.slice(-10);
@@ -483,7 +547,7 @@ async function ackWithContext(
   const ackResponse = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 150,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     messages: ackMessages,
   });
 
