@@ -1,6 +1,9 @@
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { useComparaisonMois } from '@/hooks/useComparaisonMois';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -35,6 +38,47 @@ const MOCK_PERSO = {
     { label: '✨ Divers', amount: 25, pct: 0.4, color: C.purple },
   ],
 };
+
+// ─── Comparaison mensuelle ────────────────────────────────────────────────────
+function ComparaisonRow() {
+  const { data, loading } = useComparaisonMois();
+
+  if (loading || !data) return null;
+  if (data.mois_actuel === 0 && data.mois_precedent === 0) return null;
+
+  const { delta_pct, mois_precedent_label, mois_actuel } = data;
+  const isDown = delta_pct !== null && delta_pct <= 0;
+  const pct = delta_pct !== null ? Math.abs(Math.round(delta_pct)) : null;
+
+  const text =
+    pct !== null
+      ? isDown
+        ? `📉  ${pct}% de moins qu'en ${mois_precedent_label}`
+        : `📈  ${pct}% de plus qu'en ${mois_precedent_label}`
+      : `🗓  ${mois_actuel.toLocaleString('fr-FR')} € dépensés · premier mois de suivi`;
+
+  return (
+    <View
+      style={[
+        cmpStyles.row,
+        isDown || pct === null
+          ? { borderColor: 'rgba(196,245,66,0.28)', backgroundColor: 'rgba(196,245,66,0.06)' }
+          : { borderColor: 'rgba(255,122,77,0.28)', backgroundColor: 'rgba(255,122,77,0.06)' },
+      ]}
+    >
+      <Text
+        style={[cmpStyles.text, { color: isDown || pct === null ? C.lime : C.warm }]}
+      >
+        {text}
+      </Text>
+      {pct !== null && (
+        <Text style={cmpStyles.sub}>
+          vs {mois_precedent_label} ({data.mois_precedent.toLocaleString('fr-FR')} €)
+        </Text>
+      )}
+    </View>
+  );
+}
 
 // ─── Freelance Dashboard ──────────────────────────────────────────────────────
 function FreelanceDashboard() {
@@ -83,6 +127,8 @@ function FreelanceDashboard() {
           </View>
         </View>
       </Card>
+
+      <ComparaisonRow />
 
       {/* TVA warning */}
       <View style={styles.alert}>
@@ -185,6 +231,8 @@ function PersoDashboard() {
           </View>
         </View>
       </Card>
+
+      <ComparaisonRow />
 
       {/* Alert */}
       <View style={styles.alert}>
@@ -357,12 +405,129 @@ function PersoEmpty() {
   );
 }
 
+// ─── Tutorial ─────────────────────────────────────────────────────────────────
+const TUTORIAL_STEPS: Record<string, Array<{ emoji: string; title: string; body: string }>> = {
+  freelance: [
+    {
+      emoji: '💰',
+      title: 'Ton dispo net, en temps réel',
+      body: "En haut, c'est ce que tu peux vraiment dépenser — après avoir mis tes charges de côté automatiquement.",
+    },
+    {
+      emoji: '⚡',
+      title: 'Revenu ou dépense en 2 taps',
+      body: "Les boutons en bas de l'écran t'y emmènent direct. Rapide, sans friction.",
+    },
+    {
+      emoji: '🤖',
+      title: 'Karl est là pour toi',
+      body: "Pose-lui n'importe quelle question sur tes finances. Il répond comme un pote qui a fait de la compta.",
+    },
+  ],
+  perso: [
+    {
+      emoji: '💰',
+      title: 'Ce qu\'il te reste ce mois',
+      body: "En haut, c'est ce que tu peux encore dépenser jusqu'à la fin du mois — pas juste ce qui est sur ton compte.",
+    },
+    {
+      emoji: '⚡',
+      title: 'Entrée ou dépense en 2 taps',
+      body: "Les boutons en bas de l'écran t'y emmènent direct. Simple et rapide.",
+    },
+    {
+      emoji: '🤖',
+      title: 'Karl est là pour toi',
+      body: "Pose-lui n'importe quelle question sur ton budget. Il répond sans jargon.",
+    },
+  ],
+};
+
+function DashboardTutorial({
+  visible,
+  profile,
+  onDone,
+}: {
+  visible: boolean;
+  profile: string;
+  onDone: () => void;
+}) {
+  const [step, setStep] = useState(0);
+  const steps = TUTORIAL_STEPS[profile] ?? TUTORIAL_STEPS.freelance;
+  const accent = profile === 'perso' ? C.purple : C.lime;
+  const current = steps[step];
+  const isLast = step === steps.length - 1;
+
+  useEffect(() => {
+    if (visible) setStep(0);
+  }, [visible]);
+
+  function next() {
+    if (isLast) onDone();
+    else setStep((s) => s + 1);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <View style={tutStyles.backdrop}>
+        <View style={tutStyles.card}>
+          <Text style={tutStyles.emoji}>{current.emoji}</Text>
+          <View style={tutStyles.textBlock}>
+            <Text style={tutStyles.tutTitle}>{current.title}</Text>
+            <Text style={tutStyles.tutBody}>{current.body}</Text>
+          </View>
+          <View style={tutStyles.dots}>
+            {steps.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  tutStyles.dot,
+                  i === step && { backgroundColor: accent, width: 16 },
+                ]}
+              />
+            ))}
+          </View>
+          <Pressable
+            style={[tutStyles.btn, { backgroundColor: accent }]}
+            onPress={next}
+          >
+            <Text style={tutStyles.btnText}>{isLast ? "C'est parti !" : 'Suivant'}</Text>
+          </Pressable>
+          {!isLast && (
+            <Pressable onPress={onDone}>
+              <Text style={tutStyles.skip}>Passer</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
-  const { profile } = useApp();
+  const { profile, onboardingDone, tutorialDone, setTutorialDone } = useApp();
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  useEffect(() => {
+    if (onboardingDone && !tutorialDone) {
+      setShowTutorial(true);
+    }
+  }, [onboardingDone, tutorialDone]);
+
+  function handleTutorialDone() {
+    setShowTutorial(false);
+    setTutorialDone(true);
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {profile === 'perso' ? <PersoDashboard /> : <FreelanceDashboard />}
+      <DashboardTutorial
+        visible={showTutorial}
+        profile={profile ?? 'freelance'}
+        onDone={handleTutorialDone}
+      />
     </SafeAreaView>
   );
 }
@@ -512,5 +677,83 @@ const styles = StyleSheet.create({
     color: C.muted,
     textAlign: 'center',
     marginTop: 2,
+  },
+});
+
+const cmpStyles = StyleSheet.create({
+  row: {
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 2,
+  },
+  text: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 13,
+  },
+  sub: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 11,
+    color: C.muted,
+  },
+});
+
+const tutStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(8,6,4,0.75)',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingBottom: 44,
+  },
+  card: {
+    backgroundColor: C.surf,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    borderRadius: 24,
+    padding: 28,
+    gap: 20,
+    alignItems: 'center',
+  },
+  emoji: { fontSize: 52 },
+  textBlock: { gap: 8, alignItems: 'center' },
+  tutTitle: {
+    fontFamily: 'Sora_800ExtraBold',
+    fontSize: 20,
+    color: C.text,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  tutBody: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: C.muted,
+    textAlign: 'center',
+  },
+  dots: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.line,
+  },
+  btn: {
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  btnText: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 15,
+    color: C.dark,
+  },
+  skip: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 13,
+    color: C.muted,
   },
 });
