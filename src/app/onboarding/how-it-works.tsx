@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -62,7 +62,7 @@ export default function HowItWorksScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <View style={styles.top}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <Text style={styles.title}>Voilà le deal.</Text>
           <View style={styles.cards}>
             {features.map((f, i) => (
@@ -87,7 +87,7 @@ export default function HowItWorksScreen() {
               </Card>
             ))}
           </View>
-        </View>
+        </ScrollView>
 
         <View style={styles.footer}>
           <OnboardingDots total={3} current={2} />
@@ -107,9 +107,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 22,
-    justifyContent: 'space-between',
   },
-  top: { gap: 16 },
+  scrollContent: { gap: 16, paddingBottom: 16 },
   title: {
     fontFamily: 'Sora_800ExtraBold',
     fontSize: 23,

@@ -21,7 +21,7 @@ export default function PaydayScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <View style={styles.top}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <Text style={styles.title}>Ton salaire tombe{'\n'}quand ?</Text>
             <Text style={styles.sub}>
@@ -63,7 +63,7 @@ export default function PaydayScreen() {
               </Text>
             </View>
           </Card>
-        </View>
+        </ScrollView>
 
         <View style={styles.footer}>
           <OnboardingDots total={3} current={1} />
@@ -89,9 +89,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 22,
-    justifyContent: 'space-between',
   },
-  top: { gap: 20 },
+  scrollContent: { gap: 20, paddingBottom: 16 },
   header: { gap: 8 },
   title: {
     fontFamily: 'Sora_800ExtraBold',

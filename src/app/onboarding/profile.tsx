@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -41,8 +41,11 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        {/* Bloc centré : titre + sous-titre + cartes */}
-        <View style={styles.main}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
+        >
           <View style={styles.header}>
             <Text style={styles.title}>Karl bosse pour qui ?</Text>
             <Text style={styles.sub}>
@@ -80,7 +83,7 @@ export default function ProfileScreen() {
               );
             })}
           </View>
-        </View>
+        </ScrollView>
 
         {/* Footer : dots + bouton */}
         <View style={styles.footer}>
@@ -106,9 +109,9 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 28,
   },
-  main: {
-    flex: 1,
+  scrollContent: {
     gap: 24,
+    paddingBottom: 16,
   },
   footer: {
     gap: 18,

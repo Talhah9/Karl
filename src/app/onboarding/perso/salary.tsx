@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Slider } from '@/components/ui/Slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -42,7 +42,11 @@ export default function SalaryScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <View style={styles.top}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
+        >
           <View style={styles.header}>
             <Text style={styles.title}>Ton salaire net,{'\n'}c'est combien ?</Text>
             <Text style={styles.sub}>Ce qui tombe vraiment sur ton compte chaque mois.</Text>
@@ -90,7 +94,7 @@ export default function SalaryScreen() {
               </Text>
             </View>
           </Card>
-        </View>
+        </ScrollView>
 
         <View style={styles.footer}>
           <OnboardingDots total={3} current={0} />
@@ -116,9 +120,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 22,
-    justifyContent: 'space-between',
   },
-  top: { gap: 22 },
+  scrollContent: { gap: 22, paddingBottom: 16 },
   header: { gap: 8 },
   title: {
     fontFamily: 'Sora_800ExtraBold',
