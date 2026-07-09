@@ -4,6 +4,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useComparaisonMois } from '@/hooks/useComparaisonMois';
+import { useTrend30j } from '@/hooks/useTrend30j';
+import { SpendingChart } from '@/components/ui/SpendingChart';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -77,6 +79,29 @@ function ComparaisonRow() {
         </Text>
       )}
     </View>
+  );
+}
+
+// ─── Trend card ───────────────────────────────────────────────────────────────
+function TrendCard({ accent }: { accent: string }) {
+  const { data, loading } = useTrend30j();
+
+  if (loading) return null;
+  const hasAny = data.some((d) => d.total > 0);
+  if (!hasAny) return null;
+
+  const total = data.reduce((s, d) => s + d.total, 0);
+
+  return (
+    <Card style={{ gap: 10 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={styles.cardMono}>Dépenses · 30 derniers jours</Text>
+        <Text style={[styles.cardMono, { color: accent }]}>
+          {total.toLocaleString('fr-FR')} €
+        </Text>
+      </View>
+      <SpendingChart data={data} color={accent} height={72} />
+    </Card>
   );
 }
 
@@ -166,6 +191,8 @@ function FreelanceDashboard() {
           </View>
         </Card>
       </View>
+
+      <TrendCard accent={C.lime} />
 
       {/* Quick actions */}
       <View style={styles.actions}>
@@ -300,6 +327,8 @@ function PersoDashboard() {
           ))}
         </View>
       </Card>
+
+      <TrendCard accent={C.purple} />
 
       {/* Quick actions */}
       <View style={styles.actions}>
