@@ -3,5 +3,5 @@ import { useApp } from '@/context/AppContext';
 
 export default function Index() {
   const { onboardingDone } = useApp();
-  return <Redirect href={onboardingDone ? '/(tabs)' : '/onboarding/welcome'} />;
+  return <Redirect href={onboardingDone ? '/(tabs)' : '/onboarding/profile'} />;
 }
