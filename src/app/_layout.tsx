@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   Sora_400Regular,
   Sora_600SemiBold,
@@ -39,19 +40,21 @@ export default function RootLayout() {
     }
   }, [soraLoaded, monoLoaded]);
 
-  if (!soraLoaded || !monoLoaded) return null;
+  if (!soraLoaded || !monoLoaded) return <View style={styles.root} />;
 
   return (
-    <AppProvider>
-      <View style={styles.root}>
-        <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
-        </Stack>
-      </View>
-    </AppProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <AppProvider>
+        <View style={styles.root}>
+          <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
+          </Stack>
+        </View>
+      </AppProvider>
+    </GestureHandlerRootView>
   );
 }
 

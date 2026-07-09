@@ -31,21 +31,18 @@ const options: Array<{
 
 export default function ProfileScreen() {
   const { setProfile, profile } = useApp();
-  const [selected, setSelected] = useState<UserProfile>(profile ?? 'freelance');
+  const [selected, setSelected] = useState<UserProfile>(profile ?? null);
 
-  function handleContinue() {
-    setProfile(selected);
-    if (selected === 'freelance') {
-      router.push('/onboarding/freelance/status');
-    } else {
-      router.push('/onboarding/perso/salary');
-    }
+  function handleSelect(id: UserProfile) {
+    setSelected(id);
+    setProfile(id!);
   }
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <View style={styles.top}>
+        {/* Bloc centré : titre + sous-titre + cartes */}
+        <View style={styles.main}>
           <View style={styles.header}>
             <Text style={styles.title}>Karl bosse pour qui ?</Text>
             <Text style={styles.sub}>
@@ -58,16 +55,24 @@ export default function ProfileScreen() {
               return (
                 <Pressable
                   key={opt.id}
-                  onPress={() => setSelected(opt.id)}
-                  style={[styles.optCard, active && styles.optCardActive]}
+                  onPress={() => handleSelect(opt.id)}
+                  style={[
+                    styles.optCard,
+                    active && {
+                      borderColor: opt.karlColor,
+                      backgroundColor: opt.id === 'perso'
+                        ? 'rgba(167,139,250,0.07)'
+                        : 'rgba(196,245,66,0.07)',
+                    },
+                  ]}
                 >
                   <View style={styles.optRow}>
                     <View style={styles.optLeft}>
                       <KarlMascot size={38} color={opt.karlColor} />
                       <Text style={styles.optLabel}>{opt.label}</Text>
                     </View>
-                    <View style={[styles.radio, active && styles.radioActive]}>
-                      {active && <View style={styles.radioDot} />}
+                    <View style={[styles.radio, active && { borderColor: opt.karlColor }]}>
+                      {active && <View style={[styles.radioDot, { backgroundColor: opt.karlColor }]} />}
                     </View>
                   </View>
                   <Text style={styles.optDesc}>{opt.desc}</Text>
@@ -77,10 +82,12 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Footer : dots + bouton */}
         <View style={styles.footer}>
-          <OnboardingDots total={3} current={2} />
+          <OnboardingDots total={3} current={0} />
           <Button
-            onPress={handleContinue}
+            onPress={() => router.push('/onboarding/welcome')}
+            disabled={!selected}
             accentColor={selected === 'perso' ? C.purple : C.lime}
           >
             Continuer
@@ -97,10 +104,15 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 22,
-    justifyContent: 'space-between',
+    paddingBottom: 28,
   },
-  top: { gap: 18 },
+  main: {
+    flex: 1,
+    gap: 24,
+  },
+  footer: {
+    gap: 18,
+  },
   header: { gap: 8 },
   title: {
     fontFamily: 'Sora_800ExtraBold',
@@ -121,10 +133,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     gap: 9,
-  },
-  optCardActive: {
-    borderColor: C.lime,
-    backgroundColor: 'rgba(196,245,66,0.07)',
   },
   optRow: {
     flexDirection: 'row',
@@ -160,12 +168,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  radioActive: { borderColor: C.lime },
   radioDot: {
     width: 9,
     height: 9,
     borderRadius: 5,
     backgroundColor: C.lime,
   },
-  footer: { gap: 18 },
 });
