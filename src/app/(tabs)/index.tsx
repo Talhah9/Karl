@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useComparaisonMois } from '@/hooks/useComparaisonMois';
 import { useTrend30j } from '@/hooks/useTrend30j';
+import { useObjectifEpargne, type ObjectifEpargne } from '@/hooks/useObjectifEpargne';
 import { SpendingChart } from '@/components/ui/SpendingChart';
 
 import { Button } from '@/components/ui/Button';
@@ -40,6 +41,147 @@ const MOCK_PERSO = {
     { label: '✨ Divers', amount: 25, pct: 0.4, color: C.purple },
   ],
 };
+
+// ─── Objectif d'épargne ───────────────────────────────────────────────────────
+function ObjectifModal({
+  visible,
+  initial,
+  accent,
+  onSave,
+  onClose,
+}: {
+  visible: boolean;
+  initial: ObjectifEpargne | null;
+  accent: string;
+  onSave: (v: Pick<ObjectifEpargne, 'label' | 'montant_cible' | 'montant_actuel'>) => void;
+  onClose: () => void;
+}) {
+  const [label, setLabel] = useState(initial?.label ?? '');
+  const [cible, setCible] = useState(initial ? String(initial.montant_cible) : '');
+  const [actuel, setActuel] = useState(initial ? String(initial.montant_actuel) : '0');
+
+  useEffect(() => {
+    if (visible) {
+      setLabel(initial?.label ?? '');
+      setCible(initial ? String(initial.montant_cible) : '');
+      setActuel(initial ? String(initial.montant_actuel) : '0');
+    }
+  }, [visible, initial]);
+
+  function handleSave() {
+    const cibleN = parseFloat(cible.replace(',', '.'));
+    const actuelN = parseFloat(actuel.replace(',', '.'));
+    if (!label.trim() || isNaN(cibleN) || cibleN <= 0) return;
+    onSave({ label: label.trim(), montant_cible: cibleN, montant_actuel: isNaN(actuelN) ? 0 : actuelN });
+    onClose();
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <Pressable style={goalStyles.backdrop} onPress={onClose} />
+        <View style={goalStyles.sheet}>
+          <Text style={goalStyles.sheetTitle}>
+            {initial ? "Modifier l'objectif" : "Nouvel objectif d'épargne"}
+          </Text>
+
+          <Text style={goalStyles.fieldLabel}>Nom de l'objectif</Text>
+          <TextInput
+            style={goalStyles.input}
+            value={label}
+            onChangeText={setLabel}
+            placeholder="Ex : Vacances été 🏖"
+            placeholderTextColor={C.muted}
+          />
+
+          <Text style={goalStyles.fieldLabel}>Montant cible (€)</Text>
+          <TextInput
+            style={goalStyles.input}
+            value={cible}
+            onChangeText={setCible}
+            keyboardType="numeric"
+            placeholder="3000"
+            placeholderTextColor={C.muted}
+          />
+
+          <Text style={goalStyles.fieldLabel}>Épargné à ce jour (€)</Text>
+          <TextInput
+            style={goalStyles.input}
+            value={actuel}
+            onChangeText={setActuel}
+            keyboardType="numeric"
+            placeholder="0"
+            placeholderTextColor={C.muted}
+          />
+
+          <View style={goalStyles.btnRow}>
+            <Pressable style={goalStyles.cancelBtn} onPress={onClose}>
+              <Text style={goalStyles.cancelText}>Annuler</Text>
+            </Pressable>
+            <Pressable
+              style={[goalStyles.saveBtn, { backgroundColor: accent }]}
+              onPress={handleSave}
+            >
+              <Text style={goalStyles.saveText}>Enregistrer</Text>
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function SavingsGoalCard({ accent, label: profileLabel }: { accent: string; label: string }) {
+  const { goal, loading, save } = useObjectifEpargne();
+  const [modalOpen, setModalOpen] = useState(false);
+
+  if (loading) return null;
+
+  const pct = goal ? Math.min(1, goal.montant_actuel / goal.montant_cible) : 0;
+
+  return (
+    <>
+      <Card style={[styles.gaugeCard, { flex: undefined }]}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.cardMono}>
+            {goal ? `Objectif · ${goal.label}` : "Objectif d'épargne"}
+          </Text>
+          <Pressable onPress={() => setModalOpen(true)}>
+            <Text style={[styles.cardMono, { color: accent }]}>
+              {goal ? 'Modifier' : 'Définir'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {goal ? (
+          <>
+            <ProgressRing progress={pct} size={112} color={accent}>
+              <RingLabel value={`${Math.round(pct * 100)}`} unit="%" color={accent} />
+            </ProgressRing>
+            <Text style={styles.cardSubText}>
+              {goal.montant_actuel.toLocaleString('fr-FR')} € / {goal.montant_cible.toLocaleString('fr-FR')} €
+            </Text>
+          </>
+        ) : (
+          <Text style={[styles.cardSubText, { paddingVertical: 16 }]}>
+            Fixe un objectif pour voir ta progression ici.
+          </Text>
+        )}
+      </Card>
+
+      <ObjectifModal
+        visible={modalOpen}
+        initial={goal}
+        accent={accent}
+        onSave={save}
+        onClose={() => setModalOpen(false)}
+      />
+    </>
+  );
+}
 
 // ─── Comparaison mensuelle ────────────────────────────────────────────────────
 function ComparaisonRow() {
@@ -193,6 +335,7 @@ function FreelanceDashboard() {
       </View>
 
       <TrendCard accent={C.lime} />
+      <SavingsGoalCard accent={C.lime} label="freelance" />
 
       {/* Quick actions */}
       <View style={styles.actions}>
@@ -217,7 +360,7 @@ function FreelanceDashboard() {
 // ─── Perso Dashboard ──────────────────────────────────────────────────────────
 function PersoDashboard() {
   const { userName, hasData } = useApp();
-  const { remaining, spent, reserved, daysLeft, dueDate, savingsGoal, fixedDue, categories } =
+  const { remaining, spent, reserved, daysLeft, dueDate, fixedDue, categories } =
     MOCK_PERSO;
 
   if (!hasData) return <PersoEmpty />;
@@ -269,27 +412,11 @@ function PersoDashboard() {
         </Text>
       </View>
 
-      {/* Savings ring + Prélèvements */}
-      <View style={styles.row2}>
-        <Card style={[styles.gaugeCard, { flex: 1 }]}>
-          <Text style={styles.cardMono}>Objectif · {savingsGoal.label}</Text>
-          <ProgressRing
-            progress={savingsGoal.amount / savingsGoal.target}
-            size={112}
-            color={C.purple}
-          >
-            <RingLabel
-              value={Math.round((savingsGoal.amount / savingsGoal.target) * 100)}
-              unit="%"
-              color={C.purple}
-            />
-          </ProgressRing>
-          <Text style={styles.cardSubText}>
-            {savingsGoal.amount} € / {savingsGoal.target} €
-          </Text>
-        </Card>
+      {/* Objectif d'épargne (dynamique) */}
+      <SavingsGoalCard accent={C.purple} label="perso" />
 
-        <Card style={[styles.echeanceCard, { flex: 1 }]}>
+      {/* Prélèvements */}
+      <Card style={styles.echeanceCard}>
           <View style={styles.echeanceTop}>
             <Text style={styles.cardMono}>Prélèvements</Text>
             <Tag variant="purple">J-3</Tag>
@@ -303,7 +430,6 @@ function PersoDashboard() {
             <Text style={styles.purpText}>Réservé ✅</Text>
           </View>
         </Card>
-      </View>
 
       {/* Categories */}
       <Card style={{ gap: 12 }}>
@@ -706,6 +832,80 @@ const styles = StyleSheet.create({
     color: C.muted,
     textAlign: 'center',
     marginTop: 2,
+  },
+});
+
+const goalStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(8,6,4,0.55)',
+  },
+  sheet: {
+    backgroundColor: C.surf,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 36,
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: C.line,
+  },
+  sheetTitle: {
+    fontFamily: 'Sora_800ExtraBold',
+    fontSize: 17,
+    color: C.text,
+    letterSpacing: -0.4,
+    marginBottom: 4,
+  },
+  fieldLabel: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 11.5,
+    color: C.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: 4,
+  },
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1.5,
+    borderColor: C.line,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 15,
+    color: C.text,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelText: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 14,
+    color: C.muted,
+  },
+  saveBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveText: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+    color: C.dark,
   },
 });
 
