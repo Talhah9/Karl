@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
 import { C } from '@/constants/colors';
 
@@ -23,6 +23,8 @@ export function Button({
   loading,
   style,
 }: ButtonProps) {
+  const [pressed, setPressed] = useState(false);
+
   const bg =
     variant === 'ghost'
       ? 'transparent'
@@ -43,7 +45,9 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={({ pressed }) => [
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={[
         styles.btn,
         { backgroundColor: bg, borderColor, opacity: pressed || disabled ? 0.7 : 1 },
         style,
