@@ -165,79 +165,62 @@ export default function ChatScreen() {
 
   async function confirmAction() {
     if (!pendingAction || isLoading) return;
+
+    // Capture before clearing — card must vanish the instant the user taps Confirm
+    const action = pendingAction;
+    const montantStr = editedMontant;
+    setPendingAction(null);
+    setEditedMontant('');
     setError(null);
+    setIsLoading(true);
 
-    if (pendingAction.action === 'add') {
-      const parsedMontant = parseFloat(editedMontant.replace(',', '.'));
-      if (isNaN(parsedMontant) || parsedMontant <= 0) return;
-      const tx = { ...pendingAction, montant: parsedMontant };
-      setPendingAction(null);
-      setEditedMontant('');
-      setIsLoading(true);
-      try {
+    try {
+      if (action.action === 'add') {
+        const parsedMontant = parseFloat(montantStr.replace(',', '.'));
+        if (isNaN(parsedMontant) || parsedMontant <= 0) return;
         const result = await callKarlChat({
           message: 'confirmé',
           history: buildHistory(),
-          confirmed_transaction: tx,
+          confirmed_transaction: { ...action, montant: parsedMontant },
         });
         addMessage('user', '✅ Confirmé');
         addMessage('karl', result.message);
-      } catch (err: any) {
-        setError(err.message ?? 'Erreur lors de l\'enregistrement.');
-      } finally {
-        setIsLoading(false);
-      }
 
-    } else if (pendingAction.action === 'modify') {
-      const resolvedMontant = (() => {
-        if (pendingAction.changes.montant !== undefined) {
-          const parsed = parseFloat(editedMontant.replace(',', '.'));
-          return !isNaN(parsed) && parsed > 0 ? parsed : pendingAction.current.montant;
-        }
-        return pendingAction.current.montant;
-      })();
-      const payload = {
-        id: pendingAction.id,
-        montant: resolvedMontant,
-        categorie: pendingAction.changes.categorie ?? pendingAction.current.categorie,
-        type: pendingAction.changes.type ?? pendingAction.current.type,
-        description: pendingAction.changes.description ?? pendingAction.current.description,
-      };
-      setPendingAction(null);
-      setEditedMontant('');
-      setIsLoading(true);
-      try {
+      } else if (action.action === 'modify') {
+        const resolvedMontant = (() => {
+          if (action.changes.montant !== undefined) {
+            const parsed = parseFloat(montantStr.replace(',', '.'));
+            return !isNaN(parsed) && parsed > 0 ? parsed : action.current.montant;
+          }
+          return action.current.montant;
+        })();
         const result = await callKarlChat({
           message: 'confirmé',
           history: buildHistory(),
-          confirmed_modification: payload,
+          confirmed_modification: {
+            id: action.id,
+            montant: resolvedMontant,
+            categorie: action.changes.categorie ?? action.current.categorie,
+            type: action.changes.type ?? action.current.type,
+            description: action.changes.description ?? action.current.description,
+          },
         });
         addMessage('user', '✅ Confirmé');
         addMessage('karl', result.message);
-      } catch (err: any) {
-        setError(err.message ?? 'Erreur lors de la modification.');
-      } finally {
-        setIsLoading(false);
-      }
 
-    } else if (pendingAction.action === 'delete') {
-      const { id } = pendingAction;
-      setPendingAction(null);
-      setEditedMontant('');
-      setIsLoading(true);
-      try {
+      } else if (action.action === 'delete') {
         const result = await callKarlChat({
           message: 'confirmé',
           history: buildHistory(),
-          confirmed_deletion: { id },
+          confirmed_deletion: { id: action.id },
         });
         addMessage('user', '🗑️ Supprimé');
         addMessage('karl', result.message);
-      } catch (err: any) {
-        setError(err.message ?? 'Erreur lors de la suppression.');
-      } finally {
-        setIsLoading(false);
       }
+    } catch (err: any) {
+      setError(err.message ?? "Erreur lors de l'opération.");
+    } finally {
+      setIsLoading(false);
     }
   }
 

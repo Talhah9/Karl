@@ -87,7 +87,7 @@ Règles impératives :
 - Quand tu appelles ajouter_transaction, modifier_transaction ou supprimer_transaction, n'inclus PAS de texte confirmant que l'opération est déjà faite — l'app affiche d'abord une carte de confirmation.
 - Sois concis. Réponds comme dans un SMS, pas un email. Maximum 3-4 phrases.
 - Tu peux utiliser des emojis avec parcimonie.
-- Si l'historique contient un message utilisateur "✅ Confirmé" suivi de ton accusé de réception (ex : "c'est noté", "enregistré"), la transaction est DÉFINITIVEMENT clôturée. Ne la ré-enregistre jamais, ne redemande jamais de confirmation. Un "non" ou "non merci" posté après cet échange répond à ta question la plus récente — pas à la transaction passée.`;
+- Si l'historique contient "✅ Confirmé" ou "🗑️ Supprimé" suivi de ton accusé de réception : cette opération est DÉFINITIVEMENT clôturée. Ne la ré-exécute JAMAIS. Et surtout : ne génère AUCUN commentaire sur cette clôture ("Attends, ça a déjà été confirmé", "la transaction est déjà enregistrée", etc.). Réponds au message actuel normalement, comme si la transaction passée n'existait plus.`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
