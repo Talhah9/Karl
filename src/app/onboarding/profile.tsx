@@ -42,6 +42,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
         <ScrollView
+          style={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scrollContent}
@@ -85,7 +86,6 @@ export default function ProfileScreen() {
           </View>
         </ScrollView>
 
-        {/* Footer : dots + bouton */}
         <View style={styles.footer}>
           <OnboardingDots total={3} current={0} />
           <Button
@@ -109,6 +109,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 28,
   },
+  scroll: { flex: 1 },
   scrollContent: {
     gap: 24,
     paddingBottom: 16,

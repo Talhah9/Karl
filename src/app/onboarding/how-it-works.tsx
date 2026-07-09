@@ -62,7 +62,7 @@ export default function HowItWorksScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <Text style={styles.title}>Voilà le deal.</Text>
           <View style={styles.cards}>
             {features.map((f, i) => (
@@ -108,6 +108,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 22,
   },
+  scroll: { flex: 1 },
   scrollContent: { gap: 16, paddingBottom: 16 },
   title: {
     fontFamily: 'Sora_800ExtraBold',

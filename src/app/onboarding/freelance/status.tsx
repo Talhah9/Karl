@@ -28,37 +28,35 @@ export default function StatusScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <View style={styles.top}>
-            <View style={styles.header}>
-              <Text style={styles.title}>Tu es sous quel statut ?</Text>
-              <Text style={styles.sub}>Ça me sert à calculer tes cotisations au bon taux.</Text>
-            </View>
-            <View style={styles.options}>
-              {statuses.map((s) => {
-                const active = selected === s.id;
-                return (
-                  <Pressable
-                    key={s.id}
-                    onPress={() => setSelected(s.id)}
-                    style={[styles.optCard, active && styles.optCardActive]}
-                  >
-                    <View style={styles.optLeft}>
-                      <Text style={styles.optLabel}>{s.label}</Text>
-                      <Text style={styles.optSub}>{s.sub}</Text>
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Tu es sous quel statut ?</Text>
+            <Text style={styles.sub}>Ça me sert à calculer tes cotisations au bon taux.</Text>
+          </View>
+          <View style={styles.options}>
+            {statuses.map((s) => {
+              const active = selected === s.id;
+              return (
+                <Pressable
+                  key={s.id}
+                  onPress={() => setSelected(s.id)}
+                  style={[styles.optCard, active && styles.optCardActive]}
+                >
+                  <View style={styles.optLeft}>
+                    <Text style={styles.optLabel}>{s.label}</Text>
+                    <Text style={styles.optSub}>{s.sub}</Text>
+                  </View>
+                  <View style={styles.optRight}>
+                    {s.rate ? (
+                      <Tag variant={active ? 'lime' : 'muted'}>{s.rate}</Tag>
+                    ) : null}
+                    <View style={[styles.radio, active && styles.radioActive]}>
+                      {active && <View style={styles.radioDot} />}
                     </View>
-                    <View style={styles.optRight}>
-                      {s.rate ? (
-                        <Tag variant={active ? 'lime' : 'muted'}>{s.rate}</Tag>
-                      ) : null}
-                      <View style={[styles.radio, active && styles.radioActive]}>
-                        {active && <View style={styles.radioDot} />}
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         </ScrollView>
 
@@ -86,7 +84,8 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 22,
   },
-  top: { gap: 18, paddingBottom: 20 },
+  scroll: { flex: 1 },
+  scrollContent: { gap: 18, paddingBottom: 20 },
   header: { gap: 8 },
   title: {
     fontFamily: 'Sora_800ExtraBold',

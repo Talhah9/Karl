@@ -43,7 +43,7 @@ export default function ChargesScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <Text style={styles.title}>Ton régime de charges</Text>
             <Text style={styles.sub}>
@@ -143,6 +143,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 22,
   },
+  scroll: { flex: 1 },
   scrollContent: { gap: 18, paddingBottom: 16 },
   header: { gap: 8 },
   title: {

@@ -43,6 +43,7 @@ export default function SalaryScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
         <ScrollView
+          style={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scrollContent}
@@ -121,6 +122,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 22,
   },
+  scroll: { flex: 1 },
   scrollContent: { gap: 22, paddingBottom: 16 },
   header: { gap: 8 },
   title: {
