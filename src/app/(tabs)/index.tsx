@@ -1,12 +1,23 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useComparaisonMois } from '@/hooks/useComparaisonMois';
-import { useTrend30j } from '@/hooks/useTrend30j';
+import { useComparaisonMois, type ComparaisonMois } from '@/hooks/useComparaisonMois';
+import { useTrend30j, type TrendDay } from '@/hooks/useTrend30j';
 import { useObjectifEpargne, type ObjectifEpargne } from '@/hooks/useObjectifEpargne';
 import { useChargesFixes } from '@/hooks/useChargesFixes';
+import { useCategoriesMois } from '@/hooks/useCategoriesMois';
 import { SpendingChart } from '@/components/ui/SpendingChart';
 
 import { Button } from '@/components/ui/Button';
@@ -16,9 +27,10 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ProgressRing, RingLabel } from '@/components/ui/ProgressRing';
 import { Tag } from '@/components/ui/Tag';
 import { C, getChargeRate } from '@/constants/colors';
+import { getCatEmoji, getCatLabel } from '@/constants/categories';
 import { useApp } from '@/context/AppContext';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Mock data (freelance only — real data pending bank connect) ──────────────
 const MOCK_FREELANCE = {
   balance: 8240,
   provisioned: 2411,
@@ -27,23 +39,8 @@ const MOCK_FREELANCE = {
   dueDate: '31 juil.',
   tvaWarning: { threshold: 36800, used: 34700 },
 };
-const MOCK_PERSO = {
-  remaining: 640,
-  spent: 345,
-  reserved: 1115,
-  daysLeft: 15,
-  dueDate: '27 juil.',
-  savingsGoal: { label: 'Vacances 🏝️', amount: 496, target: 800 },
-  fixedDue: 915,
-  categories: [
-    { label: '🛒 Courses', amount: 180, pct: 0.6, color: C.purple },
-    { label: '🍸 Sorties', amount: 95, pct: 0.8, color: C.warm },
-    { label: '🚇 Transport', amount: 45, pct: 0.5, color: C.purple },
-    { label: '✨ Divers', amount: 25, pct: 0.4, color: C.purple },
-  ],
-};
 
-// ─── Objectif d'épargne ───────────────────────────────────────────────────────
+// ─── Objectif d'épargne modal ─────────────────────────────────────────────────
 function ObjectifModal({
   visible,
   initial,
@@ -135,8 +132,18 @@ function ObjectifModal({
   );
 }
 
-function SavingsGoalCard({ accent, label: profileLabel }: { accent: string; label: string }) {
-  const { goal, loading, save } = useObjectifEpargne();
+// ─── Savings goal card ────────────────────────────────────────────────────────
+function SavingsGoalCard({
+  accent,
+  goal,
+  save,
+  loading,
+}: {
+  accent: string;
+  goal: ObjectifEpargne | null;
+  save: (v: Pick<ObjectifEpargne, 'label' | 'montant_cible' | 'montant_actuel'>) => Promise<void>;
+  loading: boolean;
+}) {
   const [modalOpen, setModalOpen] = useState(false);
 
   if (loading) return null;
@@ -185,9 +192,7 @@ function SavingsGoalCard({ accent, label: profileLabel }: { accent: string; labe
 }
 
 // ─── Comparaison mensuelle ────────────────────────────────────────────────────
-function ComparaisonRow() {
-  const { data, loading } = useComparaisonMois();
-
+function ComparaisonRow({ data, loading }: { data: ComparaisonMois | null; loading: boolean }) {
   if (loading || !data) return null;
   if (data.mois_actuel === 0 && data.mois_precedent === 0) return null;
 
@@ -211,9 +216,7 @@ function ComparaisonRow() {
           : { borderColor: 'rgba(255,122,77,0.28)', backgroundColor: 'rgba(255,122,77,0.06)' },
       ]}
     >
-      <Text
-        style={[cmpStyles.text, { color: isDown || pct === null ? C.lime : C.warm }]}
-      >
+      <Text style={[cmpStyles.text, { color: isDown || pct === null ? C.lime : C.warm }]}>
         {text}
       </Text>
       {pct !== null && (
@@ -226,9 +229,7 @@ function ComparaisonRow() {
 }
 
 // ─── Trend card ───────────────────────────────────────────────────────────────
-function TrendCard({ accent }: { accent: string }) {
-  const { data, loading } = useTrend30j();
-
+function TrendCard({ accent, data, loading }: { accent: string; data: TrendDay[]; loading: boolean }) {
   if (loading) return null;
   const hasAny = data.some((d) => d.total > 0);
   if (!hasAny) return null;
@@ -251,6 +252,10 @@ function TrendCard({ accent }: { accent: string }) {
 // ─── Freelance Dashboard ──────────────────────────────────────────────────────
 function FreelanceDashboard() {
   const { userName, freelanceSetup, hasData } = useApp();
+  const { goal, loading: goalLoading, save: saveGoal } = useObjectifEpargne();
+  const { data: trendData, loading: trendLoading } = useTrend30j();
+  const { data: cmpData, loading: cmpLoading } = useComparaisonMois();
+
   const rate = getChargeRate(
     freelanceSetup.status,
     freelanceSetup.versementLiberatoire,
@@ -285,25 +290,32 @@ function FreelanceDashboard() {
         <View style={styles.heroPills}>
           <View style={styles.heroPill}>
             <Text style={styles.heroPillText}>
-              Sur le compte <Text style={{ fontFamily: 'Sora_700Bold' }}>{MOCK_FREELANCE.balance.toLocaleString('fr-FR')} €</Text>
+              Sur le compte{' '}
+              <Text style={{ fontFamily: 'Sora_700Bold' }}>
+                {MOCK_FREELANCE.balance.toLocaleString('fr-FR')} €
+              </Text>
             </Text>
           </View>
           <View style={styles.heroPill}>
             <Text style={styles.heroPillText}>
-              Provisionné <Text style={{ fontFamily: 'Sora_700Bold' }}>{MOCK_FREELANCE.provisioned.toLocaleString('fr-FR')} €</Text>
+              Provisionné{' '}
+              <Text style={{ fontFamily: 'Sora_700Bold' }}>
+                {MOCK_FREELANCE.provisioned.toLocaleString('fr-FR')} €
+              </Text>
             </Text>
           </View>
         </View>
       </Card>
 
-      <ComparaisonRow />
+      <ComparaisonRow data={cmpData} loading={cmpLoading} />
 
       {/* TVA warning */}
       <View style={styles.alert}>
         <Text style={styles.alertEmoji}>👀</Text>
         <Text style={styles.alertText}>
           Tu approches du <Text style={styles.warm}>seuil de TVA</Text> (36 800 €). Plus que{' '}
-          <Text style={styles.boldText}>{tvaRemaining.toLocaleString('fr-FR')} €</Text> avant de devoir la facturer.
+          <Text style={styles.boldText}>{tvaRemaining.toLocaleString('fr-FR')} €</Text> avant de
+          devoir la facturer.
         </Text>
       </View>
 
@@ -335,8 +347,8 @@ function FreelanceDashboard() {
         </Card>
       </View>
 
-      <TrendCard accent={C.lime} />
-      <SavingsGoalCard accent={C.lime} label="freelance" />
+      <TrendCard accent={C.lime} data={trendData} loading={trendLoading} />
+      <SavingsGoalCard accent={C.lime} goal={goal} save={saveGoal} loading={goalLoading} />
 
       {/* Quick actions */}
       <View style={styles.actions}>
@@ -361,16 +373,39 @@ function FreelanceDashboard() {
 // ─── Perso Dashboard ──────────────────────────────────────────────────────────
 function PersoDashboard() {
   const { userName, persoSetup, hasData } = useApp();
-  const { total: chargesTotal, charges, loading: chargesLoading } = useChargesFixes();
-  const { goal, loading: goalLoading } = useObjectifEpargne();
+  const { total: chargesTotal, charges, loading: chargesLoading, refresh: refreshCharges } = useChargesFixes();
+  const { goal, loading: goalLoading, save: saveGoal, refresh: refreshGoal } = useObjectifEpargne();
+  const { data: catData, totalDepenses, refresh: refreshCat } = useCategoriesMois();
+  const { data: trendData, loading: trendLoading, refresh: refreshTrend } = useTrend30j();
+  const { data: cmpData, loading: cmpLoading, refresh: refreshCmp } = useComparaisonMois();
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshCharges();
+      refreshGoal();
+      refreshCat();
+      refreshTrend();
+      refreshCmp();
+    }, [refreshCharges, refreshGoal, refreshCat, refreshTrend, refreshCmp])
+  );
 
   const salary = persoSetup.netSalary;
   const savingsGoal = goal?.montant_cible ?? 0;
   const available = salary - chargesTotal - savingsGoal;
-  const reserved = chargesTotal + savingsGoal;
 
-  const { daysLeft, dueDate } = MOCK_PERSO;
-  const { spent, categories } = MOCK_PERSO;
+  const budgetPct =
+    available > 0 && catData.length > 0
+      ? Math.round((totalDepenses / available) * 100)
+      : 0;
+
+  const monthLabel = new Date().toLocaleDateString('fr-FR', { month: 'long' });
+
+  const dateLabel = new Date().toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  const formattedDate = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
 
   if (!hasData) return <PersoEmpty />;
 
@@ -383,7 +418,7 @@ function PersoDashboard() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.dateText}>Lundi 12 juillet</Text>
+          <Text style={styles.dateText}>{formattedDate}</Text>
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <Text style={styles.greeting}>Salut {userName} 👋</Text>
             <Tag variant="purple">Perso</Tag>
@@ -419,25 +454,30 @@ function PersoDashboard() {
         </View>
       </Card>
 
-      <ComparaisonRow />
+      <ComparaisonRow data={cmpData} loading={cmpLoading} />
 
-      {/* Alert */}
-      <View style={styles.alert}>
-        <Text style={styles.alertEmoji}>👀</Text>
-        <Text style={styles.alertText}>
-          Budget <Text style={styles.warm}>Sorties</Text> : 80 % cramé et on est le 12. On lève le pied ?
-        </Text>
-      </View>
+      {/* Alert — computed from real spending */}
+      {catData.length > 0 && available > 0 && (
+        <View style={styles.alert}>
+          <Text style={styles.alertEmoji}>{budgetPct >= 80 ? '⚠️' : '📊'}</Text>
+          <Text style={styles.alertText}>
+            <Text style={styles.warm}>{budgetPct} %</Text> du budget variable dépensé ce mois
+            {budgetPct >= 80 ? ' — on lève le pied ?' : '.'}
+          </Text>
+        </View>
+      )}
 
-      {/* Objectif d'épargne (dynamique) */}
-      <SavingsGoalCard accent={C.purple} label="perso" />
+      {/* Savings goal */}
+      <SavingsGoalCard accent={C.purple} goal={goal} save={saveGoal} loading={goalLoading} />
 
       {/* Prélèvements */}
       <Card style={styles.echeanceCard}>
         <View style={styles.echeanceTop}>
           <Text style={styles.cardMono}>Prélèvements fixes</Text>
           {charges.length > 0 && (
-            <Tag variant="purple">{charges.length} charge{charges.length > 1 ? 's' : ''}</Tag>
+            <Tag variant="purple">
+              {charges.length} charge{charges.length > 1 ? 's' : ''}
+            </Tag>
           )}
         </View>
         <View>
@@ -457,44 +497,56 @@ function PersoDashboard() {
         </View>
       </Card>
 
-      {/* Categories */}
-      <Card style={{ gap: 12 }}>
-        <Text style={styles.cardMono}>Où part ton argent · juillet</Text>
-        <View style={{ gap: 11 }}>
-          {categories.map((cat) => (
-            <View key={cat.label} style={{ gap: 5 }}>
-              <View style={styles.catRow}>
-                <Text style={styles.catLabel}>{cat.label}</Text>
-                <Text
-                  style={[
-                    styles.catAmount,
-                    cat.color === C.warm && { color: C.warm },
-                  ]}
-                >
-                  {cat.amount} €
-                </Text>
-              </View>
-              <ProgressBar progress={cat.pct} color={cat.color} height={7} />
-            </View>
-          ))}
-        </View>
-      </Card>
+      {/* Categories — real data from transactions */}
+      {catData.length > 0 && (
+        <Card style={{ gap: 12 }}>
+          <Text style={styles.cardMono}>Où part ton argent · {monthLabel}</Text>
+          <View style={{ gap: 11 }}>
+            {catData.slice(0, 5).map((cat) => {
+              const pct = available > 0 ? Math.min(1, cat.total / available) : 0;
+              const barColor = pct > 0.3 ? C.warm : C.purple;
+              return (
+                <View key={cat.categorie} style={{ gap: 5 }}>
+                  <View style={styles.catRow}>
+                    <Text style={styles.catLabel}>
+                      {getCatEmoji(cat.categorie)} {getCatLabel(cat.categorie)}
+                    </Text>
+                    <Text style={[styles.catAmount, pct > 0.3 && { color: C.warm }]}>
+                      {cat.total.toLocaleString('fr-FR')} €
+                    </Text>
+                  </View>
+                  <ProgressBar progress={pct} color={barColor} height={7} />
+                </View>
+              );
+            })}
+          </View>
+        </Card>
+      )}
 
-      <TrendCard accent={C.purple} />
+      <TrendCard accent={C.purple} data={trendData} loading={trendLoading} />
 
       {/* Quick actions */}
       <View style={styles.actions}>
-        <Pressable style={[styles.actionBtn, { flex: 1 }]} onPress={() => router.push('/(tabs)/add')}>
+        <Pressable
+          style={[styles.actionBtn, { flex: 1 }]}
+          onPress={() => router.push('/(tabs)/add')}
+        >
           <Text style={styles.purp}>+ </Text>
           <Text style={styles.actionText}>Entrée</Text>
         </Pressable>
-        <Pressable style={[styles.actionBtn, { flex: 1 }]} onPress={() => router.push('/(tabs)/add')}>
+        <Pressable
+          style={[styles.actionBtn, { flex: 1 }]}
+          onPress={() => router.push('/(tabs)/add')}
+        >
           <Text style={styles.warm}>− </Text>
           <Text style={styles.actionText}>Dépense</Text>
         </Pressable>
       </View>
 
-      <Pressable style={[styles.askKarl, { borderColor: C.line }]} onPress={() => router.push('/(tabs)/chat')}>
+      <Pressable
+        style={[styles.askKarl, { borderColor: C.line }]}
+        onPress={() => router.push('/(tabs)/chat')}
+      >
         <KarlMascot size={30} color={C.purple} />
         <Text style={styles.askKarlText}>Demander à Karl…</Text>
       </Pressable>
@@ -608,7 +660,7 @@ const TUTORIAL_STEPS: Record<string, Array<{ emoji: string; title: string; body:
   perso: [
     {
       emoji: '💰',
-      title: 'Ce qu\'il te reste ce mois',
+      title: "Ce qu'il te reste ce mois",
       body: "En haut, c'est ce que tu peux encore dépenser jusqu'à la fin du mois — pas juste ce qui est sur ton compte.",
     },
     {
@@ -661,17 +713,11 @@ function DashboardTutorial({
             {steps.map((_, i) => (
               <View
                 key={i}
-                style={[
-                  tutStyles.dot,
-                  i === step && { backgroundColor: accent, width: 16 },
-                ]}
+                style={[tutStyles.dot, i === step && { backgroundColor: accent, width: 16 }]}
               />
             ))}
           </View>
-          <Pressable
-            style={[tutStyles.btn, { backgroundColor: accent }]}
-            onPress={next}
-          >
+          <Pressable style={[tutStyles.btn, { backgroundColor: accent }]} onPress={next}>
             <Text style={tutStyles.btnText}>{isLast ? "C'est parti !" : 'Suivant'}</Text>
           </Pressable>
           {!isLast && (
@@ -737,7 +783,12 @@ const styles = StyleSheet.create({
     letterSpacing: -1.5,
     lineHeight: 50,
   },
-  heroSub: { fontFamily: 'Sora_400Regular', fontSize: 12, color: 'rgba(20,18,16,0.7)', marginTop: 2 },
+  heroSub: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 12,
+    color: 'rgba(20,18,16,0.7)',
+    marginTop: 2,
+  },
   heroPills: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' },
   heroPill: {
     backgroundColor: 'rgba(20,18,16,0.12)',
@@ -759,14 +810,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   alertEmoji: { fontSize: 18 },
-  alertText: { fontFamily: 'Sora_400Regular', fontSize: 12, lineHeight: 17, color: C.text, flex: 1 },
+  alertText: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    color: C.text,
+    flex: 1,
+  },
   warm: { fontFamily: 'Sora_700Bold', color: C.warm },
   boldText: { fontFamily: 'Sora_700Bold', color: C.text },
 
   row2: { flexDirection: 'row', gap: 14, alignItems: 'stretch' },
   gaugeCard: { alignItems: 'center', gap: 8, paddingVertical: 16 },
   echeanceCard: { gap: 6, paddingVertical: 16, justifyContent: 'space-between' },
-  echeanceTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  echeanceTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   echeanceAmount: {
     fontFamily: 'Sora_800ExtraBold',
     fontSize: 28,
@@ -781,7 +842,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.9,
   },
-  cardSubText: { fontFamily: 'Sora_400Regular', fontSize: 10.5, lineHeight: 14, color: C.muted, textAlign: 'center' },
+  cardSubText: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 10.5,
+    lineHeight: 14,
+    color: C.muted,
+    textAlign: 'center',
+  },
   limeText: { fontFamily: 'Sora_600SemiBold', fontSize: 10, color: C.lime },
   purpText: { fontFamily: 'Sora_600SemiBold', fontSize: 10, color: C.purple },
 

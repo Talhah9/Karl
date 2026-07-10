@@ -8,25 +8,44 @@ import { Card } from '@/components/ui/Card';
 import { KarlMascot } from '@/components/ui/KarlMascot';
 import { Tag } from '@/components/ui/Tag';
 import { C, getChargeRate } from '@/constants/colors';
+import {
+  PERSO_CATEGORIES,
+  FREELANCE_INCOME_CATEGORIES,
+  type Categorie,
+} from '@/constants/categories';
 import { useApp } from '@/context/AppContext';
+import { supabase } from '@/lib/supabase';
 
 type EntryType = 'income' | 'expense';
 
-const CATEGORIES_FREELANCE_INCOME = ['Prestation · BNC', 'Prestation · BIC', 'Vente', 'Autre'];
-const CATEGORIES_PERSO_EXPENSE = ['🛒 Courses', '🍸 Sorties', '🚇 Transport', '🏠 Logement', '✨ Divers'];
+const PERSO_INCOME_CATS: Categorie[] = [
+  { value: 'salaire', label: 'Salaire', emoji: '💰' },
+  { value: 'remboursement', label: 'Remboursement', emoji: '🔄' },
+  { value: 'divers', label: 'Divers', emoji: '✨' },
+];
+
+function getCatList(isFreelance: boolean, type: EntryType): Categorie[] {
+  if (isFreelance) return type === 'income' ? FREELANCE_INCOME_CATEGORIES : PERSO_CATEGORIES;
+  return type === 'income' ? PERSO_INCOME_CATS : PERSO_CATEGORIES;
+}
+
+function defaultCat(isFreelance: boolean, type: EntryType): string {
+  if (isFreelance) return type === 'income' ? 'prestation' : 'divers';
+  return type === 'income' ? 'salaire' : 'divers';
+}
 
 export default function AddScreen() {
   const { profile, freelanceSetup, setHasData } = useApp();
   const accent = profile === 'perso' ? C.purple : C.lime;
   const isFreelance = profile === 'freelance';
 
-  const [type, setType] = useState<EntryType>(isFreelance ? 'income' : 'expense');
+  const initialType: EntryType = isFreelance ? 'income' : 'expense';
+  const [type, setType] = useState<EntryType>(initialType);
   const [amount, setAmount] = useState('');
-  const [field1, setField1] = useState(isFreelance ? 'Studio Mörk' : 'UberEats');
-  const [category, setCategory] = useState(
-    isFreelance ? CATEGORIES_FREELANCE_INCOME[0] : CATEGORIES_PERSO_EXPENSE[4]
-  );
+  const [field1, setField1] = useState('');
+  const [category, setCategory] = useState(defaultCat(isFreelance, initialType));
   const [toggle, setToggle] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const parsed = parseFloat(amount.replace(',', '.')) || 0;
   const rate = getChargeRate(
@@ -42,6 +61,39 @@ export default function AddScreen() {
     month: 'short',
     year: 'numeric',
   });
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const catList = getCatList(isFreelance, type);
+  const currentCat = catList.find((c) => c.value === category);
+
+  function handleTypeChange(t: EntryType) {
+    setType(t);
+    setCategory(defaultCat(isFreelance, t));
+  }
+
+  async function handleSave() {
+    if (parsed <= 0 || saving) return;
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) return;
+
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        montant: parsed,
+        categorie: category,
+        type: type === 'income' ? 'revenu' : 'depense',
+        description: field1.trim() || null,
+        date: todayStr,
+      });
+
+      setHasData(true);
+      router.back();
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -54,7 +106,11 @@ export default function AddScreen() {
         <Text style={[styles.navOk, { color: accent, opacity: parsed > 0 ? 1 : 0.4 }]}>OK</Text>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Segment */}
         <View style={styles.seg}>
           {(isFreelance
@@ -63,7 +119,7 @@ export default function AddScreen() {
           ).map(([id, label]) => (
             <Text
               key={id}
-              onPress={() => setType(id)}
+              onPress={() => handleTypeChange(id)}
               style={[
                 styles.segItem,
                 type === id && [styles.segItemActive, { backgroundColor: accent }],
@@ -103,12 +159,15 @@ export default function AddScreen() {
               onChangeText={setField1}
               selectionColor={accent}
               placeholderTextColor={C.muted}
+              placeholder={isFreelance ? 'Ex : Studio Mörk' : 'Ex : Carrefour'}
             />
           </View>
 
           <View style={styles.field}>
             <Text style={styles.fieldLab}>Catégorie</Text>
-            <Text style={styles.fieldVal}>{category}</Text>
+            <Text style={styles.fieldVal}>
+              {currentCat ? `${currentCat.emoji} ${currentCat.label}` : category}
+            </Text>
           </View>
 
           <View style={styles.field}>
@@ -134,6 +193,31 @@ export default function AddScreen() {
           </View>
         </View>
 
+        {/* Category chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+        >
+          {catList.map((cat) => {
+            const active = cat.value === category;
+            return (
+              <Pressable
+                key={cat.value}
+                onPress={() => setCategory(cat.value)}
+                style={[
+                  styles.chip,
+                  active && { backgroundColor: accent, borderColor: accent },
+                ]}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {cat.emoji} {cat.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         {/* Karl preview */}
         {parsed > 0 && (
           <Card
@@ -152,17 +236,21 @@ export default function AddScreen() {
                 {isFreelance && type === 'income' ? (
                   <>
                     Sur ces{' '}
-                    <Text style={[styles.bold, { color: accent }]}>{parsed.toLocaleString('fr-FR')} €</Text>, je
-                    bloque{' '}
+                    <Text style={[styles.bold, { color: accent }]}>
+                      {parsed.toLocaleString('fr-FR')} €
+                    </Text>
+                    , je bloque{' '}
                     <Text style={[styles.bold, { color: accent }]}>{charges} €</Text> (
                     {Math.round(rate * 100)} %) pour l'URSSAF. Dispo pour toi :{' '}
                     <Text style={[styles.bold, { color: accent }]}>{dispo} €</Text>. 🤝
                   </>
                 ) : (
                   <>
-                    Dépense enregistrée. Budget mis à jour.{' '}
-                    <Text style={[styles.bold, { color: accent }]}>{parsed} €</Text> de
-                    moins dans l'enveloppe.
+                    Dépense de{' '}
+                    <Text style={[styles.bold, { color: accent }]}>
+                      {parsed.toLocaleString('fr-FR')} €
+                    </Text>{' '}
+                    en {currentCat?.label ?? category} — budget mis à jour.
                   </>
                 )}
               </Text>
@@ -188,10 +276,9 @@ export default function AddScreen() {
 
         <Button
           accentColor={accent}
-          onPress={() => {
-            setHasData(true);
-            router.back();
-          }}
+          disabled={parsed <= 0}
+          loading={saving}
+          onPress={handleSave}
         >
           Enregistrer
         </Button>
@@ -273,8 +360,26 @@ const styles = StyleSheet.create({
   fieldLab: { fontFamily: 'Sora_400Regular', fontSize: 12, color: C.muted },
   fieldVal: { fontFamily: 'Sora_600SemiBold', fontSize: 14, color: C.text },
 
+  chipRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 2 },
+  chip: {
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    backgroundColor: C.surf,
+  },
+  chipText: { fontFamily: 'Sora_600SemiBold', fontSize: 13, color: C.muted },
+  chipTextActive: { color: C.dark },
+
   karlRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  karlText: { fontFamily: 'Sora_400Regular', fontSize: 12.5, lineHeight: 18, color: C.text, flex: 1 },
+  karlText: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: C.text,
+    flex: 1,
+  },
   bold: { fontFamily: 'Sora_700Bold' },
 
   bankCard: {
