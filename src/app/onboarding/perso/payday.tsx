@@ -66,11 +66,11 @@ export default function PaydayScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
-          <OnboardingDots total={3} current={1} />
+          <OnboardingDots total={4} current={1} />
           <Button
             onPress={() => {
               setPersoSetup({ payday: day });
-              router.push('/onboarding/perso/expenses');
+              router.push('/onboarding/perso/charges');
             }}
             accentColor={C.purple}
           >

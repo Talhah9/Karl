@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useComparaisonMois } from '@/hooks/useComparaisonMois';
 import { useTrend30j } from '@/hooks/useTrend30j';
 import { useObjectifEpargne, type ObjectifEpargne } from '@/hooks/useObjectifEpargne';
+import { useChargesFixes } from '@/hooks/useChargesFixes';
 import { SpendingChart } from '@/components/ui/SpendingChart';
 
 import { Button } from '@/components/ui/Button';
@@ -359,9 +360,17 @@ function FreelanceDashboard() {
 
 // ─── Perso Dashboard ──────────────────────────────────────────────────────────
 function PersoDashboard() {
-  const { userName, hasData } = useApp();
-  const { remaining, spent, reserved, daysLeft, dueDate, fixedDue, categories } =
-    MOCK_PERSO;
+  const { userName, persoSetup, hasData } = useApp();
+  const { total: chargesTotal, charges, loading: chargesLoading } = useChargesFixes();
+  const { goal, loading: goalLoading } = useObjectifEpargne();
+
+  const salary = persoSetup.netSalary;
+  const savingsGoal = goal?.montant_cible ?? 0;
+  const available = salary - chargesTotal - savingsGoal;
+  const reserved = chargesTotal + savingsGoal;
+
+  const { daysLeft, dueDate } = MOCK_PERSO;
+  const { spent, categories } = MOCK_PERSO;
 
   if (!hasData) return <PersoEmpty />;
 
@@ -385,18 +394,26 @@ function PersoDashboard() {
 
       {/* Hero */}
       <Card variant="hero" style={styles.heroCard}>
-        <Text style={styles.heroLabel}>Reste à dépenser · ce mois</Text>
-        <Text style={styles.heroAmount}>{remaining} €</Text>
-        <Text style={styles.heroSub}>jusqu'au {dueDate} · encore {daysLeft} jours</Text>
+        <Text style={styles.heroLabel}>Disponible ce mois</Text>
+        <Text style={styles.heroAmount}>
+          {chargesLoading || goalLoading ? '— ' : available.toLocaleString('fr-FR')} €
+        </Text>
+        <Text style={styles.heroSub}>salaire − charges − épargne</Text>
         <View style={styles.heroPills}>
           <View style={styles.heroPill}>
             <Text style={styles.heroPillText}>
-              Dépensé <Text style={{ fontFamily: 'Sora_700Bold' }}>{spent} €</Text>
+              Charges{' '}
+              <Text style={{ fontFamily: 'Sora_700Bold' }}>
+                {chargesLoading ? '…' : chargesTotal.toLocaleString('fr-FR')} €
+              </Text>
             </Text>
           </View>
           <View style={styles.heroPill}>
             <Text style={styles.heroPillText}>
-              Réservé <Text style={{ fontFamily: 'Sora_700Bold' }}>{reserved} €</Text>
+              Épargne{' '}
+              <Text style={{ fontFamily: 'Sora_700Bold' }}>
+                {goalLoading ? '…' : savingsGoal.toLocaleString('fr-FR')} €
+              </Text>
             </Text>
           </View>
         </View>
@@ -417,19 +434,28 @@ function PersoDashboard() {
 
       {/* Prélèvements */}
       <Card style={styles.echeanceCard}>
-          <View style={styles.echeanceTop}>
-            <Text style={styles.cardMono}>Prélèvements</Text>
-            <Tag variant="purple">J-3</Tag>
-          </View>
-          <View>
-            <Text style={styles.echeanceAmount}>{fixedDue} €</Text>
-            <Text style={styles.echeanceSub}>loyer, abos, transport</Text>
-          </View>
-          <View style={{ gap: 5 }}>
-            <ProgressBar progress={1} color={C.purple} />
-            <Text style={styles.purpText}>Réservé ✅</Text>
-          </View>
-        </Card>
+        <View style={styles.echeanceTop}>
+          <Text style={styles.cardMono}>Prélèvements fixes</Text>
+          {charges.length > 0 && (
+            <Tag variant="purple">{charges.length} charge{charges.length > 1 ? 's' : ''}</Tag>
+          )}
+        </View>
+        <View>
+          <Text style={styles.echeanceAmount}>
+            {chargesLoading ? '— ' : chargesTotal.toLocaleString('fr-FR')} €
+          </Text>
+          <Text style={styles.echeanceSub}>
+            {charges.length > 0
+              ? charges.slice(0, 3).map((c) => c.nom).join(', ') +
+                (charges.length > 3 ? '…' : '')
+              : 'Aucune charge enregistrée'}
+          </Text>
+        </View>
+        <View style={{ gap: 5 }}>
+          <ProgressBar progress={chargesTotal > 0 ? 1 : 0} color={C.purple} />
+          {chargesTotal > 0 && <Text style={styles.purpText}>Réservé ✅</Text>}
+        </View>
+      </Card>
 
       {/* Categories */}
       <Card style={{ gap: 12 }}>

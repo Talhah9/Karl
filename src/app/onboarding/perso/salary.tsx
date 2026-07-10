@@ -98,7 +98,7 @@ export default function SalaryScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
-          <OnboardingDots total={3} current={0} />
+          <OnboardingDots total={4} current={0} />
           <Button
             onPress={() => {
               setPersoSetup({ netSalary: salary });
