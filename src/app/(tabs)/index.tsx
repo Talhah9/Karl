@@ -366,6 +366,10 @@ function FreelanceDashboard() {
         <KarlMascot size={30} />
         <Text style={styles.askKarlText}>Demander à Karl…</Text>
       </Pressable>
+
+      <Pressable style={styles.exportLink} onPress={() => router.push('/export')}>
+        <Text style={styles.exportLinkText}>↗ Exporter mes données (CSV / PDF)</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -549,6 +553,13 @@ function PersoDashboard() {
       >
         <KarlMascot size={30} color={C.purple} />
         <Text style={styles.askKarlText}>Demander à Karl…</Text>
+      </Pressable>
+
+      <Pressable
+        style={styles.exportLink}
+        onPress={() => router.push('/export')}
+      >
+        <Text style={styles.exportLinkText}>↗ Exporter mes données (CSV / PDF)</Text>
       </Pressable>
     </ScrollView>
   );
@@ -925,6 +936,16 @@ const styles = StyleSheet.create({
     color: C.muted,
     textAlign: 'center',
     marginTop: 2,
+  },
+  exportLink: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  exportLinkText: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 12,
+    color: C.muted,
+    textDecorationLine: 'underline',
   },
 });
 
