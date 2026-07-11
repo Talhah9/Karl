@@ -29,6 +29,7 @@ import { Tag } from '@/components/ui/Tag';
 import { C, getChargeRate } from '@/constants/colors';
 import { getCatEmoji, getCatLabel } from '@/constants/categories';
 import { useApp } from '@/context/AppContext';
+import { getBudgetCycle } from '@/utils/budgetCycle';
 
 // ─── Mock data (freelance only — real data pending bank connect) ──────────────
 const MOCK_FREELANCE = {
@@ -408,7 +409,8 @@ function PersoDashboard() {
       ? Math.round((totalDepenses / budgetEnvelope) * 100)
       : 0;
 
-  const monthLabel = new Date().toLocaleDateString('fr-FR', { month: 'long' });
+  const cycle = getBudgetCycle(persoSetup.payday);
+  const monthLabel = cycle.cycleLabel;
 
   const dateLabel = new Date().toLocaleDateString('fr-FR', {
     weekday: 'long',

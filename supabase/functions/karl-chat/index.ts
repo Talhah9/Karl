@@ -598,6 +598,21 @@ interface UserContext {
   freelanceSetup?: { status: string; monthlyRevenue: number; versementLiberatoire: boolean; acre: boolean };
 }
 
+// Calcule le début du cycle de paie aligné sur le payday (même logique que getBudgetCycle côté client)
+function getPayCycleStart(payday: number): string {
+  const now = new Date();
+  const day = now.getDate();
+  let year = now.getFullYear();
+  let month = now.getMonth();
+  if (day < payday) {
+    month -= 1;
+    if (month < 0) { month = 11; year -= 1; }
+  }
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const d = Math.min(payday, lastDay);
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 async function executeTool(
   supabase: ReturnType<typeof createClient>,
   userId: string,
@@ -608,11 +623,15 @@ async function executeTool(
   switch (toolName) {
     case "calculer_solde_disponible": {
       const now = new Date();
-      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      // Utilise le cycle de paie pour perso, mois calendaire pour freelance
+      const payday = ctx.persoSetup?.payday ?? 1;
+      const cycleStart = ctx.profile === "perso"
+        ? getPayCycleStart(payday)
+        : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 
-      // Same formula as the dashboard: salary − charges_fixes − objectif_épargne − dépenses_variables
+      // Même formule que le dashboard : salary − charges_fixes − objectif_épargne − dépenses_variables
       const [{ data: txData }, { data: chargesData }, { data: goalData }] = await Promise.all([
-        supabase.from("transactions").select("montant, type").eq("user_id", userId).gte("date", monthStart),
+        supabase.from("transactions").select("montant, type").eq("user_id", userId).gte("date", cycleStart),
         supabase.from("charges_fixes").select("montant").eq("user_id", userId),
         supabase.from("objectifs_epargne").select("montant_cible").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
@@ -635,9 +654,18 @@ async function executeTool(
       } else {
         const salaire = ctx.persoSetup?.netSalary ?? 0;
         const solde = salaire - chargesTotal - savingsGoal - totalDepense;
+        console.log("[Karl solde debug]", {
+          payday,
+          cycleStart,
+          salaire,
+          chargesTotal,
+          savingsGoal,
+          totalDepense,
+          solde,
+        });
         return {
           solde_disponible: solde,
-          detail: `Salaire: ${salaire}€ | Charges fixes: ${chargesTotal}€ | Épargne réservée: ${savingsGoal}€ | Dépenses variables: ${totalDepense}€ | Reste: ${solde}€`,
+          detail: `Cycle depuis le ${cycleStart} | Salaire: ${salaire}€ | Charges fixes: ${chargesTotal}€ | Épargne réservée: ${savingsGoal}€ | Dépenses variables: ${totalDepense}€ | Reste: ${solde}€`,
         };
       }
     }

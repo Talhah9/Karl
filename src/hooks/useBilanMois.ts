@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
+import { getBudgetCycle } from '@/utils/budgetCycle';
 import type { ObjectifEpargne } from '@/hooks/useObjectifEpargne';
 
 export interface BilanData {
@@ -20,7 +21,8 @@ export interface BilanData {
 }
 
 export function useBilanMois() {
-  const { authReady } = useApp();
+  const { authReady, profile, persoSetup } = useApp();
+  const payday = profile === 'perso' ? persoSetup.payday : 1;
   const [data, setData] = useState<BilanData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -29,32 +31,43 @@ export function useBilanMois() {
     setLoading(true);
 
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth(); // 0-indexed
+    const cycle = getBudgetCycle(payday, now);
+    const { cycleStart, cycleEnd, prevCycleStart, daysElapsed } = cycle;
 
-    const curStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    // Pour "meilleur cycle sur 3" : cycle d'il y a 2 cycles
+    const dayBeforePrev = new Date(new Date(prevCycleStart).getTime() - 86400000);
+    const twoCyclesAgo = getBudgetCycle(payday, dayBeforePrev);
 
-    // Previous month
-    const prevDate = new Date(year, month, 0);
-    const prevYear = prevDate.getFullYear();
-    const prevMonth = prevDate.getMonth() + 1;
-    const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
-
-    // 2 months ago — for "best month in 3" comparison
-    const twoMonthsAgo = new Date(year, month - 2, 1);
-    const twoMonthsAgoStr = twoMonthsAgo.toISOString().split('T')[0];
-
-    const [txsResult, prevResult, goalResult, historicResult] = await Promise.all([
-      supabase.from('transactions').select('montant, categorie, type, date').gte('date', curStart),
-      supabase.from('transactions').select('montant').eq('type', 'depense').gte('date', prevStart).lt('date', curStart),
-      supabase.from('objectifs_epargne').select('id, label, montant_cible, montant_actuel, echeance').order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      supabase.from('transactions').select('montant, date').eq('type', 'depense').gte('date', twoMonthsAgoStr).lt('date', curStart),
+    const [txsResult, prevResult, goalResult, prevPrevResult] = await Promise.all([
+      supabase
+        .from('transactions')
+        .select('montant, categorie, type, date')
+        .gte('date', cycleStart)
+        .lte('date', cycleEnd),
+      supabase
+        .from('transactions')
+        .select('montant')
+        .eq('type', 'depense')
+        .gte('date', prevCycleStart)
+        .lt('date', cycleStart),
+      supabase
+        .from('objectifs_epargne')
+        .select('id, label, montant_cible, montant_actuel, echeance')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('transactions')
+        .select('montant')
+        .eq('type', 'depense')
+        .gte('date', twoCyclesAgo.cycleStart)
+        .lt('date', prevCycleStart),
     ]);
 
     const txs = txsResult.data ?? [];
     const prevTxs = prevResult.data ?? [];
     const goal = goalResult.data as ObjectifEpargne | null;
-    const historicTxs = historicResult.data ?? [];
+    const prevPrevTxs = prevPrevResult.data ?? [];
 
     let totalDepenses = 0;
     let totalRevenus = 0;
@@ -75,38 +88,33 @@ export function useBilanMois() {
     let topCategorie: string | null = null;
     let topCategorieTotal = 0;
     for (const [cat, total] of catMap.entries()) {
-      if (total > topCategorieTotal) {
-        topCategorieTotal = total;
-        topCategorie = cat;
-      }
+      if (total > topCategorieTotal) { topCategorieTotal = total; topCategorie = cat; }
     }
     const topCategoriePct =
       totalDepenses > 0 ? Math.round((topCategorieTotal / totalDepenses) * 100) : 0;
 
     const prevTotal = prevTxs.reduce((s, tx) => s + Number(tx.montant), 0);
     const deltaPct = prevTotal > 0 ? ((totalDepenses - prevTotal) / prevTotal) * 100 : null;
-    const prevMoisLabel = new Date(prevYear, prevMonth - 1, 1).toLocaleDateString('fr-FR', { month: 'long' });
+    const prevMoisLabel = new Date(prevCycleStart).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
 
-    const joursEcoules = now.getDate();
+    // Jours sans dépense : itérer chaque jour du cycle jusqu'à aujourd'hui
+    const today = now.toISOString().split('T')[0];
+    const cycleStartDate = new Date(cycleStart);
     const daysSet = new Set<string>();
-    for (let i = 1; i <= joursEcoules; i++) {
-      const d = new Date(year, month, i);
-      daysSet.add(d.toISOString().split('T')[0]);
+    for (let i = 0; i < daysElapsed; i++) {
+      const d = new Date(cycleStartDate.getTime() + i * 86400000);
+      const dateStr = d.toISOString().split('T')[0];
+      if (dateStr <= today) daysSet.add(dateStr);
     }
     const joursSansDepense = [...daysSet].filter((d) => !depDates.has(d)).length;
 
-    const monthMap = new Map<string, number>();
-    for (const tx of historicTxs) {
-      const key = (tx.date as string).substring(0, 7);
-      monthMap.set(key, (monthMap.get(key) ?? 0) + Number(tx.montant));
-    }
+    const prevPrevTotal = prevPrevTxs.reduce((s, tx) => s + Number(tx.montant), 0);
+    const prevTotals = [prevTotal, prevPrevTotal].filter((t) => t > 0);
     const isBestMonthRecent =
-      monthMap.size >= 1 && totalDepenses > 0
-        ? [...monthMap.values()].every((t) => totalDepenses <= t)
-        : false;
+      totalDepenses > 0 && prevTotals.length > 0 && prevTotals.every((t) => totalDepenses <= t);
 
     setData({
-      moisLabel: now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+      moisLabel: cycle.cycleLabel,
       totalDepenses,
       totalRevenus,
       deltaPct,
@@ -116,12 +124,12 @@ export function useBilanMois() {
       topCategoriePct,
       savingsGoal: goal,
       joursSansDepense,
-      joursEcoules,
+      joursEcoules: daysElapsed,
       isBestMonthRecent,
       nbTransactions: txs.length,
     });
     setLoading(false);
-  }, [authReady]);
+  }, [authReady, payday]);
 
   useEffect(() => {
     refresh();

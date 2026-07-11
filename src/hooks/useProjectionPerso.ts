@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
+import { getBudgetCycle } from '@/utils/budgetCycle';
 
 export interface WeekData {
   label: string;
@@ -15,7 +16,7 @@ export interface ProjectionPerso {
   chargesTotal: number;
   savingsGoal: number;
   savingsGoalLabel: string;
-  budgetEnvelope: number;   // salary − charges − savings (what you CAN spend)
+  budgetEnvelope: number;   // salary − charges − savings
   totalDepenses: number;
   paydayLabel: string;
   projectedMonthSpending: number;
@@ -23,7 +24,7 @@ export interface ProjectionPerso {
   weeklyBudget: number;
   weeks: WeekData[];
   daysElapsed: number;
-  daysInMonth: number;
+  daysInMonth: number;      // daysInCycle (kept for compat)
 }
 
 export function useProjectionPerso() {
@@ -36,18 +37,18 @@ export function useProjectionPerso() {
     setLoading(true);
 
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const daysElapsed = now.getDate();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const cycle = getBudgetCycle(persoSetup.payday, now);
+    const { cycleStart, cycleEnd, daysElapsed, daysInCycle } = cycle;
+    const cycleStartDate = new Date(cycleStart);
+    const cycleEndDate = new Date(cycleEnd);
 
     const [txsResult, chargesResult, goalResult] = await Promise.all([
       supabase
         .from('transactions')
         .select('montant, date')
         .eq('type', 'depense')
-        .gte('date', monthStart),
+        .gte('date', cycleStart)
+        .lte('date', cycleEnd),
       supabase.from('charges_fixes').select('montant'),
       supabase
         .from('objectifs_epargne')
@@ -70,26 +71,47 @@ export function useProjectionPerso() {
     const totalDepenses = txs.reduce((s, t) => s + Number(t.montant), 0);
 
     const dailyRate = daysElapsed > 0 ? totalDepenses / daysElapsed : 0;
-    const projectedMonthSpending = dailyRate * daysInMonth;
+    const projectedMonthSpending = dailyRate * daysInCycle;
     const projectedRemaining = budgetEnvelope - projectedMonthSpending;
-    const weeklyBudget = budgetEnvelope / 4.33;
+    const weeklyBudget = budgetEnvelope / (daysInCycle / 7);
 
-    const weekRanges = [
-      { label: 'S1', start: 1, end: 7 },
-      { label: 'S2', start: 8, end: 14 },
-      { label: 'S3', start: 15, end: 21 },
-      { label: 'S4', start: 22, end: daysInMonth },
-    ];
+    // Barres hebdomadaires — semaines relatives au début du cycle
+    const todayISO = now.toISOString().split('T')[0];
+    const MS = 86400000;
+
+    const weekRanges = [0, 1, 2, 3].map((w) => {
+      const wStart = new Date(cycleStartDate.getTime() + w * 7 * MS);
+      const wEnd = w === 3 ? cycleEndDate : new Date(cycleStartDate.getTime() + (w + 1) * 7 * MS - MS);
+      return {
+        label: `S${w + 1}`,
+        start: wStart.toISOString().split('T')[0],
+        end: wEnd.toISOString().split('T')[0],
+      };
+    });
 
     const weeks: WeekData[] = weekRanges.map(({ label, start, end }) => {
-      const weekTxs = txs.filter((t) => {
-        const day = parseInt(t.date.split('-')[2], 10);
-        return day >= start && day <= end;
-      });
+      const weekTxs = txs.filter((t) => (t.date as string) >= start && (t.date as string) <= end);
       const spending = weekTxs.reduce((s, t) => s + Number(t.montant), 0);
-      const isFuture = start > daysElapsed;
+      const isFuture = start > todayISO;
       const pct = weeklyBudget > 0 ? spending / weeklyBudget : 0;
       return { label, spending, pct: Math.min(pct, 1), isFuture, isOverBudget: spending > weeklyBudget };
+    });
+
+    const paydayLabel = `le ${cycleEndDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`;
+
+    console.log('[Budget Cycle Debug]', {
+      payday: persoSetup.payday,
+      cycleStart,
+      cycleEnd,
+      daysElapsed,
+      daysInCycle,
+      salary,
+      chargesTotal,
+      savingsGoal,
+      totalDepenses,
+      budgetEnvelope,
+      projectedMonthSpending: Math.round(projectedMonthSpending),
+      projectedRemaining: Math.round(projectedRemaining),
     });
 
     setData({
@@ -99,13 +121,13 @@ export function useProjectionPerso() {
       savingsGoalLabel: goal?.label ?? "ton objectif d'épargne",
       budgetEnvelope,
       totalDepenses,
-      paydayLabel: `le ${persoSetup.payday}`,
+      paydayLabel,
       projectedMonthSpending,
       projectedRemaining,
       weeklyBudget,
       weeks,
       daysElapsed,
-      daysInMonth,
+      daysInMonth: daysInCycle,
     });
     setLoading(false);
   }, [authReady, persoSetup]);
