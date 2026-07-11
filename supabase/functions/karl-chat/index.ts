@@ -6,7 +6,12 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const FREE_LIMIT = 20;
+const RECHARGE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 heures
+const FREE_RECHARGE = 5;
+const FREE_MAX = 20;
+const PRO_RECHARGE = 25;
+const PRO_MAX = 100;
+const ABUSE_LIMIT = 60; // par fenêtre glissante de 24h
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -107,7 +112,22 @@ Tu parles à un(e) entrepreneur(e) / freelance. Vocabulaire adapté :
 ${COMMON_RULES}`;
 }
 
-// Extracts meaningful keywords (≥3 chars, letters only) from a string
+function buildSystemBlocks(
+  systemPrompt: string,
+  learnedHints?: string
+): Anthropic.TextBlockParam[] {
+  const blocks: Anthropic.TextBlockParam[] = [
+    { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
+  ];
+  if (learnedHints) {
+    blocks.push({
+      type: "text",
+      text: `\n\nCatégories mémorisées pour cet utilisateur (utilise-les automatiquement, sans demander) : ${learnedHints}.`,
+    });
+  }
+  return blocks;
+}
+
 function extractKeywords(text: string): string[] {
   return (text.toLowerCase().match(/\b[a-zA-ZÀ-ÿ]{3,}\b/g) ?? []).slice(0, 25);
 }
@@ -116,6 +136,73 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+interface CreditsInfo {
+  credits_restants: number;
+  abonne: boolean;
+  credits_max: number;
+  derniere_recharge: string;
+}
+
+async function getOrCreateCredits(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  now: Date
+): Promise<CreditsInfo> {
+  const { data: row } = await supabase
+    .from("credits_utilisateur")
+    .select("credits_restants, abonne, derniere_recharge")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const abonne = (row as any)?.abonne ?? false;
+  const rechargeAmt = abonne ? PRO_RECHARGE : FREE_RECHARGE;
+  const maxCredits = abonne ? PRO_MAX : FREE_MAX;
+
+  if (!row) {
+    // Nouveau utilisateur : migration depuis usage_mensuel si existant
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const { data: usageRow } = await supabase
+      .from("usage_mensuel")
+      .select("nombre_messages_utilises")
+      .eq("user_id", userId)
+      .eq("mois", monthStart)
+      .maybeSingle();
+    const used = (usageRow as any)?.nombre_messages_utilises ?? 0;
+    const initialCredits = Math.max(0, FREE_MAX - used);
+    const nowIso = now.toISOString();
+
+    await supabase.from("credits_utilisateur").insert({
+      user_id: userId,
+      credits_restants: initialCredits,
+      derniere_recharge: nowIso,
+      abonne: false,
+    });
+    return { credits_restants: initialCredits, abonne: false, credits_max: FREE_MAX, derniere_recharge: nowIso };
+  }
+
+  // Recharge par fenêtre glissante
+  const derniere = new Date((row as any).derniere_recharge);
+  const msSince = now.getTime() - derniere.getTime();
+  const recharges = Math.floor(msSince / RECHARGE_INTERVAL_MS);
+
+  if (recharges > 0) {
+    const newCredits = Math.min((row as any).credits_restants + recharges * rechargeAmt, maxCredits);
+    const newDerniereIso = new Date(derniere.getTime() + recharges * RECHARGE_INTERVAL_MS).toISOString();
+    await supabase.from("credits_utilisateur").update({
+      credits_restants: newCredits,
+      derniere_recharge: newDerniereIso,
+    }).eq("user_id", userId);
+    return { credits_restants: newCredits, abonne, credits_max: maxCredits, derniere_recharge: newDerniereIso };
+  }
+
+  return {
+    credits_restants: (row as any).credits_restants,
+    abonne,
+    credits_max: maxCredits,
+    derniere_recharge: (row as any).derniere_recharge,
+  };
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -137,6 +224,8 @@ Deno.serve(async (req: Request) => {
     if (authError || !user) return jsonResponse({ error: "Unauthorized" }, 401);
 
     const userId = user.id;
+    const now = new Date();
+
     const body = await req.json() as {
       message: string;
       history: { role: string; content: string }[];
@@ -151,27 +240,49 @@ Deno.serve(async (req: Request) => {
     const userCtx: UserContext = { profile, persoSetup, freelanceSetup };
     const systemPrompt = buildSystemPrompt(profile);
 
-    // --- Rate limiting ---
-    const now = new Date();
-    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    // --- Crédits : recharge glissante + création si absent ---
+    const credits = await getOrCreateCredits(supabase, userId, now);
 
-    const { data: usageRow } = await supabase
-      .from("usage_mensuel")
-      .select("nombre_messages_utilises")
+    // --- Vérification abus (60 messages / 24h glissantes) ---
+    const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: recentCount } = await supabase
+      .from("conversations")
+      .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .eq("mois", monthStart)
-      .maybeSingle();
+      .eq("role", "user")
+      .gte("created_at", windowStart);
 
-    const used = (usageRow as any)?.nombre_messages_utilises ?? 0;
-
-    if (used >= FREE_LIMIT) {
+    if ((recentCount ?? 0) >= ABUSE_LIMIT) {
       return jsonResponse({
-        type: "paywall",
-        message: `Tu as utilisé tes ${FREE_LIMIT} messages gratuits ce mois-ci. Passe à Karl+ pour continuer. 🔓`,
+        type: "rate_limited",
+        message: "Tu envoies trop de messages. Limite de 60 messages par 24h atteinte. Reviens plus tard 🕐",
+        credits_restants: credits.credits_restants,
+        credits_max: credits.credits_max,
       });
     }
 
-    // --- Confirmed transaction insert ---
+    // --- Vérification crédits ---
+    if (credits.credits_restants <= 0) {
+      const nextRechargeAt = new Date(new Date(credits.derniere_recharge).getTime() + RECHARGE_INTERVAL_MS);
+      const minsLeft = Math.max(1, Math.ceil((nextRechargeAt.getTime() - now.getTime()) / 60000));
+      const timeLabel = minsLeft >= 60 ? `${Math.ceil(minsLeft / 60)}h` : `${minsLeft} min`;
+      return jsonResponse({
+        type: "paywall",
+        message: credits.abonne
+          ? `Plus de crédits pour l'instant. Prochaine recharge dans ${timeLabel}. ⏳`
+          : `Plus de crédits. Prochaine recharge dans ${timeLabel} (+${FREE_RECHARGE} crédits). Passe à Karl Pro pour 25 crédits toutes les 6h 🚀`,
+        credits_restants: 0,
+        credits_max: credits.credits_max,
+      });
+    }
+
+    // Décrémente atomiquement et retourne le nouveau solde
+    async function useCredit(): Promise<number> {
+      const { data: newCount } = await supabase.rpc("try_use_credit", { p_user_id: userId });
+      return typeof newCount === "number" && newCount >= 0 ? newCount : Math.max(0, credits.credits_restants - 1);
+    }
+
+    // --- Transaction confirmée : insertion ---
     if (confirmed_transaction) {
       const { montant, categorie, type, description } = confirmed_transaction;
       await supabase.from("transactions").insert({
@@ -183,7 +294,6 @@ Deno.serve(async (req: Request) => {
         date: now.toISOString().split("T")[0],
       });
 
-      // Feature 4: learn keyword → category associations from the description
       if (description) {
         const keywords = extractKeywords(description).slice(0, 5);
         if (keywords.length > 0) {
@@ -198,13 +308,14 @@ Deno.serve(async (req: Request) => {
         history,
         `[TRANSACTION_INSÉRÉE : ${montant}€ - ${categorie} - ${type}${description ? ` (${description})` : ""}] Accuse réception en une phrase courte et relance la conversation.`,
         `${montant}€ en ${categorie} — enregistré. ✅`,
-        systemPrompt
+        buildSystemBlocks(systemPrompt)
       );
-      await saveAndIncrementUsage(supabase, userId, monthStart, message || "confirmation", ackText);
-      return jsonResponse({ type: "message", message: ackText });
+      await saveConversation(supabase, userId, message || "confirmation", ackText);
+      const creditsAfter = await useCredit();
+      return jsonResponse({ type: "message", message: ackText, credits_restants: creditsAfter, credits_max: credits.credits_max });
     }
 
-    // --- Confirmed modification ---
+    // --- Modification confirmée ---
     if (confirmed_modification) {
       const { id, montant, categorie, type, description } = confirmed_modification;
       await supabase
@@ -217,13 +328,14 @@ Deno.serve(async (req: Request) => {
         history,
         `[TRANSACTION_MODIFIÉE : ${montant}€ - ${categorie} - ${type}] Accuse réception en une phrase courte.`,
         `Transaction modifiée : ${montant}€ en ${categorie}. ✅`,
-        systemPrompt
+        buildSystemBlocks(systemPrompt)
       );
-      await saveAndIncrementUsage(supabase, userId, monthStart, message || "modification", ackText);
-      return jsonResponse({ type: "message", message: ackText });
+      await saveConversation(supabase, userId, message || "modification", ackText);
+      const creditsAfter = await useCredit();
+      return jsonResponse({ type: "message", message: ackText, credits_restants: creditsAfter, credits_max: credits.credits_max });
     }
 
-    // --- Confirmed deletion ---
+    // --- Suppression confirmée ---
     if (confirmed_deletion) {
       const { id } = confirmed_deletion;
       await supabase
@@ -236,14 +348,15 @@ Deno.serve(async (req: Request) => {
         history,
         `[TRANSACTION_SUPPRIMÉE] Accuse réception en une phrase courte.`,
         `Transaction supprimée. ✅`,
-        systemPrompt
+        buildSystemBlocks(systemPrompt)
       );
-      await saveAndIncrementUsage(supabase, userId, monthStart, message || "suppression", ackText);
-      return jsonResponse({ type: "message", message: ackText });
+      await saveConversation(supabase, userId, message || "suppression", ackText);
+      const creditsAfter = await useCredit();
+      return jsonResponse({ type: "message", message: ackText, credits_restants: creditsAfter, credits_max: credits.credits_max });
     }
 
-    // --- Feature 4: inject learned categories into system prompt ---
-    let effectiveSystemPrompt = systemPrompt;
+    // --- Catégories apprises (injection dans le prompt) ---
+    let learnedHints: string | undefined;
     const msgKeywords = extractKeywords(message);
     if (msgKeywords.length > 0) {
       const { data: learned } = await supabase
@@ -253,16 +366,15 @@ Deno.serve(async (req: Request) => {
         .in("mot_cle", msgKeywords);
 
       if (learned && (learned as any[]).length > 0) {
-        const hints = (learned as any[])
+        learnedHints = (learned as any[])
           .map((r: any) => `"${r.mot_cle}" → catégorie "${r.categorie}"`)
           .join(", ");
-        effectiveSystemPrompt =
-          systemPrompt +
-          `\n\nCatégories mémorisées pour cet utilisateur (utilise-les automatiquement, sans demander) : ${hints}.`;
       }
     }
 
-    // --- Normal chat flow ---
+    const systemBlocks = buildSystemBlocks(systemPrompt, learnedHints);
+
+    // --- Flux de chat normal ---
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
     const recentHistory = history.slice(-10);
 
@@ -277,12 +389,12 @@ Deno.serve(async (req: Request) => {
     let response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
-      system: effectiveSystemPrompt,
+      system: systemBlocks,
       tools: TOOLS,
       messages,
     });
 
-    // Agentic tool loop
+    // Boucle agentique
     while (response.stop_reason === "tool_use") {
       const toolUseBlock = response.content.find(
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
@@ -294,13 +406,13 @@ Deno.serve(async (req: Request) => {
       if (toolName === "ajouter_transaction") {
         const txInput = input as { montant: number; categorie: string; type: string; description?: string };
 
-        // Guard: montant must appear explicitly in user messages — never hallucinated.
         if (!montantMentionnedByUser(txInput.montant, message, history)) {
           const clarifyText =
             response.content.find((b: any) => b.type === "text")?.text ??
             `C'était combien exactement ? Je vais pas inventer le prix 😅`;
-          await saveAndIncrementUsage(supabase, userId, monthStart, message, clarifyText);
-          return jsonResponse({ type: "message", message: clarifyText });
+          await saveConversation(supabase, userId, message, clarifyText);
+          const creditsAfter = await useCredit();
+          return jsonResponse({ type: "message", message: clarifyText, credits_restants: creditsAfter, credits_max: credits.credits_max });
         }
 
         const confirmText = await getConfirmationText(
@@ -313,14 +425,17 @@ Deno.serve(async (req: Request) => {
             note: "L'utilisateur doit confirmer avant l'enregistrement. Pose la question de confirmation en une phrase courte et précise. Ne dis pas que c'est déjà enregistré.",
           },
           `Tu veux que j'enregistre ${txInput.montant}€ en ${txInput.categorie} ?`,
-          effectiveSystemPrompt
+          systemBlocks
         );
 
-        await saveAndIncrementUsage(supabase, userId, monthStart, message, confirmText);
+        await saveConversation(supabase, userId, message, confirmText);
+        const creditsAfter = await useCredit();
         return jsonResponse({
           type: "pending_confirmation",
           message: confirmText,
           pending: { action: "add", ...input },
+          credits_restants: creditsAfter,
+          credits_max: credits.credits_max,
         });
       }
 
@@ -350,7 +465,7 @@ Deno.serve(async (req: Request) => {
           response = await anthropic.messages.create({
             model: "claude-sonnet-4-6",
             max_tokens: 300,
-            system: effectiveSystemPrompt,
+            system: systemBlocks,
             tools: TOOLS,
             messages,
           });
@@ -376,10 +491,11 @@ Deno.serve(async (req: Request) => {
             note: "Montre les changements et pose la question de confirmation en une phrase. Ne dis pas que la modification est déjà faite.",
           },
           `Tu veux modifier cette transaction ?`,
-          effectiveSystemPrompt
+          systemBlocks
         );
 
-        await saveAndIncrementUsage(supabase, userId, monthStart, message, confirmText);
+        await saveConversation(supabase, userId, message, confirmText);
+        const creditsAfter = await useCredit();
         return jsonResponse({
           type: "pending_confirmation",
           message: confirmText,
@@ -389,6 +505,8 @@ Deno.serve(async (req: Request) => {
             current: { montant: ex.montant, categorie: ex.categorie, type: ex.type, description: ex.description },
             changes,
           },
+          credits_restants: creditsAfter,
+          credits_max: credits.credits_max,
         });
       }
 
@@ -418,7 +536,7 @@ Deno.serve(async (req: Request) => {
           response = await anthropic.messages.create({
             model: "claude-sonnet-4-6",
             max_tokens: 300,
-            system: effectiveSystemPrompt,
+            system: systemBlocks,
             tools: TOOLS,
             messages,
           });
@@ -437,10 +555,11 @@ Deno.serve(async (req: Request) => {
             note: "Demande confirmation de suppression en une phrase. Ne dis PAS que la suppression est déjà faite.",
           },
           `Tu veux supprimer cette transaction ?`,
-          effectiveSystemPrompt
+          systemBlocks
         );
 
-        await saveAndIncrementUsage(supabase, userId, monthStart, message, confirmText);
+        await saveConversation(supabase, userId, message, confirmText);
+        const creditsAfter = await useCredit();
         return jsonResponse({
           type: "pending_confirmation",
           message: confirmText,
@@ -452,10 +571,12 @@ Deno.serve(async (req: Request) => {
             type: ex.type,
             description: ex.description,
           },
+          credits_restants: creditsAfter,
+          credits_max: credits.credits_max,
         });
       }
 
-      // Execute read-only tools deterministically
+      // Outils en lecture seule
       let toolResult: unknown;
       try {
         toolResult = await executeTool(supabase, userId, toolName, input as Record<string, unknown>, userCtx);
@@ -479,7 +600,7 @@ Deno.serve(async (req: Request) => {
       response = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 1024,
-        system: effectiveSystemPrompt,
+        system: systemBlocks,
         tools: TOOLS,
         messages,
       });
@@ -488,8 +609,9 @@ Deno.serve(async (req: Request) => {
     const finalText = response.content.find((b: any) => b.type === "text")?.text
       ?? "Hmm, je sèche là. 🤔";
 
-    await saveAndIncrementUsage(supabase, userId, monthStart, message, finalText);
-    return jsonResponse({ type: "message", message: finalText });
+    await saveConversation(supabase, userId, message, finalText);
+    const creditsAfter = await useCredit();
+    return jsonResponse({ type: "message", message: finalText, credits_restants: creditsAfter, credits_max: credits.credits_max });
 
   } catch (err) {
     console.error("karl-chat error:", err);
@@ -497,7 +619,6 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// Shared helper: ask Claude for a confirmation question then return the text
 async function getConfirmationText(
   anthropic: Anthropic,
   messages: Anthropic.MessageParam[],
@@ -505,7 +626,7 @@ async function getConfirmationText(
   toolUseId: string,
   toolResultContent: unknown,
   fallback: string,
-  systemPrompt: string
+  systemBlocks: Anthropic.TextBlockParam[]
 ): Promise<string> {
   const confirmMessages: Anthropic.MessageParam[] = [
     ...messages,
@@ -523,19 +644,18 @@ async function getConfirmationText(
   const confirmResponse = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 200,
-    system: systemPrompt,
+    system: systemBlocks,
     messages: confirmMessages,
   });
 
   return confirmResponse.content.find((b: any) => b.type === "text")?.text ?? fallback;
 }
 
-// Shared helper: generate an ack message with history context
 async function ackWithContext(
   history: { role: string; content: string }[],
   prompt: string,
   fallback: string,
-  systemPrompt: string
+  systemBlocks: Anthropic.TextBlockParam[]
 ): Promise<string> {
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   const recentHistory = history.slice(-10);
@@ -550,14 +670,13 @@ async function ackWithContext(
   const ackResponse = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 150,
-    system: systemPrompt,
+    system: systemBlocks,
     messages: ackMessages,
   });
 
   return ackResponse.content.find((b: any) => b.type === "text")?.text ?? fallback;
 }
 
-// Handles French money formats: "1€20", "1 euro 20", standard decimals, etc.
 function montantMentionnedByUser(
   montant: number,
   currentMessage: string,
@@ -570,20 +689,17 @@ function montantMentionnedByUser(
 
   const values: number[] = [];
 
-  // "1€20", "1 € 20" → 1.20
   const euroSplit = /(\d+)\s*€\s*(\d+)/g;
   let m: RegExpExecArray | null;
   while ((m = euroSplit.exec(userTexts)) !== null) {
     values.push(Number(m[1]) + Number(m[2]) / 100);
   }
 
-  // "1 euro 20", "1 euros 20" → 1.20
   const euroWord = /(\d+)\s*euros?\s*(\d+)/gi;
   while ((m = euroWord.exec(userTexts)) !== null) {
     values.push(Number(m[1]) + Number(m[2]) / 100);
   }
 
-  // Standard: "1.20", "1,20", integers
   const standard = userTexts.match(/\d+([.,]\d+)?/g) ?? [];
   for (const n of standard) {
     values.push(parseFloat(n.replace(",", ".")));
@@ -598,7 +714,6 @@ interface UserContext {
   freelanceSetup?: { status: string; monthlyRevenue: number; versementLiberatoire: boolean; acre: boolean };
 }
 
-// Calcule le début du cycle de paie aligné sur le payday (même logique que getBudgetCycle côté client)
 function getPayCycleStart(payday: number): string {
   const now = new Date();
   const day = now.getDate();
@@ -623,13 +738,11 @@ async function executeTool(
   switch (toolName) {
     case "calculer_solde_disponible": {
       const now = new Date();
-      // Utilise le cycle de paie pour perso, mois calendaire pour freelance
       const payday = ctx.persoSetup?.payday ?? 1;
       const cycleStart = ctx.profile === "perso"
         ? getPayCycleStart(payday)
         : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 
-      // Même formule que le dashboard : salary − charges_fixes − objectif_épargne − dépenses_variables
       const [{ data: txData }, { data: chargesData }, { data: goalData }] = await Promise.all([
         supabase.from("transactions").select("montant, type").eq("user_id", userId).gte("date", cycleStart),
         supabase.from("charges_fixes").select("montant").eq("user_id", userId),
@@ -654,15 +767,7 @@ async function executeTool(
       } else {
         const salaire = ctx.persoSetup?.netSalary ?? 0;
         const solde = salaire - chargesTotal - savingsGoal - totalDepense;
-        console.log("[Karl solde debug]", {
-          payday,
-          cycleStart,
-          salaire,
-          chargesTotal,
-          savingsGoal,
-          totalDepense,
-          solde,
-        });
+        console.log("[Karl solde debug]", { payday, cycleStart, salaire, chargesTotal, savingsGoal, totalDepense, solde });
         return {
           solde_disponible: solde,
           detail: `Cycle depuis le ${cycleStart} | Salaire: ${salaire}€ | Charges fixes: ${chargesTotal}€ | Épargne réservée: ${savingsGoal}€ | Dépenses variables: ${totalDepense}€ | Reste: ${solde}€`,
@@ -700,19 +805,15 @@ async function executeTool(
   }
 }
 
-async function saveAndIncrementUsage(
+async function saveConversation(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  monthStart: string,
   userMessage: string,
   assistantMessage: string
 ) {
-  await Promise.all([
-    supabase.from("conversations").insert([
-      { user_id: userId, role: "user", contenu: userMessage },
-      { user_id: userId, role: "assistant", contenu: assistantMessage },
-    ]),
-    supabase.rpc("increment_usage", { p_user_id: userId, p_mois: monthStart }),
+  await supabase.from("conversations").insert([
+    { user_id: userId, role: "user", contenu: userMessage },
+    { user_id: userId, role: "assistant", contenu: assistantMessage },
   ]);
 }
 

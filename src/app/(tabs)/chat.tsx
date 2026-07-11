@@ -21,6 +21,14 @@ import { supabase } from '@/lib/supabase';
 type MessageFrom = 'karl' | 'user';
 type Message = { id: string; from: MessageFrom; text: string };
 
+type KarlResponse = {
+  type: string;
+  message: string;
+  pending?: PendingAction;
+  credits_restants?: number;
+  credits_max?: number;
+};
+
 type PendingAction =
   | { action: 'add'; montant: number; categorie: string; type: 'depense' | 'revenu'; description?: string }
   | { action: 'delete'; id: string; montant: number; categorie: string; type: 'depense' | 'revenu'; description?: string }
@@ -46,6 +54,13 @@ function renderText(text: string) {
     }
     return <Text key={i}>{p}</Text>;
   });
+}
+
+function creditsBadgeColor(restants: number, max: number, accent: string): string {
+  const pct = max > 0 ? restants / max : 0;
+  if (pct >= 0.5) return accent;
+  if (pct >= 0.2) return C.warm;
+  return '#ff5050';
 }
 
 function Bubble({ msg, accent }: { msg: Message; accent: string }) {
@@ -98,6 +113,8 @@ export default function ChatScreen() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [editedMontant, setEditedMontant] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [creditsRestants, setCreditsRestants] = useState<number | null>(null);
+  const [creditsMax, setCreditsMax] = useState(20);
   const listRef = useRef<FlatList>(null);
 
   function buildHistory(): { role: 'user' | 'assistant'; content: string }[] {
@@ -116,11 +133,16 @@ export default function ChatScreen() {
     return id;
   }
 
-  async function callKarlChat(body: object): Promise<{ type: string; message: string; pending?: PendingAction }> {
+  async function callKarlChat(body: object): Promise<KarlResponse> {
     const { data, error: fnError } = await supabase.functions.invoke('karl-chat', { body });
     if (fnError) throw new Error(fnError.message);
     if (!data) throw new Error('Réponse vide');
-    return data as any;
+    return data as KarlResponse;
+  }
+
+  function applyCredits(result: KarlResponse) {
+    if (result.credits_restants !== undefined) setCreditsRestants(result.credits_restants);
+    if (result.credits_max !== undefined) setCreditsMax(result.credits_max);
   }
 
   async function send() {
@@ -145,9 +167,12 @@ export default function ChatScreen() {
         freelanceSetup: profile === 'freelance' ? freelanceSetup : undefined,
       });
 
+      applyCredits(result);
       if (result.type === 'paywall') {
         addMessage('karl', result.message);
         setTimeout(() => router.push('/paywall'), 1500);
+      } else if (result.type === 'rate_limited') {
+        addMessage('karl', result.message);
       } else if (result.type === 'pending_confirmation') {
         addMessage('karl', result.message);
         const pending = result.pending ?? null;
@@ -190,6 +215,7 @@ export default function ChatScreen() {
           profile,
           confirmed_transaction: { ...action, montant: parsedMontant },
         });
+        applyCredits(result);
         addMessage('user', '✅ Confirmé');
         addMessage('karl', result.message);
 
@@ -213,6 +239,7 @@ export default function ChatScreen() {
             description: action.changes.description ?? action.current.description,
           },
         });
+        applyCredits(result);
         addMessage('user', '✅ Confirmé');
         addMessage('karl', result.message);
 
@@ -223,6 +250,7 @@ export default function ChatScreen() {
           profile,
           confirmed_deletion: { id: action.id },
         });
+        applyCredits(result);
         addMessage('user', '🗑️ Supprimé');
         addMessage('karl', result.message);
       }
@@ -263,9 +291,13 @@ export default function ChatScreen() {
             </View>
           </View>
         </View>
-        <View style={styles.pill}>
-          <Text style={styles.pillText}>···</Text>
-        </View>
+        {creditsRestants !== null && (
+          <View style={[styles.pill, { borderColor: creditsBadgeColor(creditsRestants, creditsMax, accent) }]}>
+            <Text style={[styles.pillText, { color: creditsBadgeColor(creditsRestants, creditsMax, accent) }]}>
+              {creditsRestants}/{creditsMax}
+            </Text>
+          </View>
+        )}
       </View>
 
       <KeyboardAvoidingView
