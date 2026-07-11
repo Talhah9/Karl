@@ -383,7 +383,7 @@ function PersoDashboard() {
   const { userName, persoSetup, hasData } = useApp();
   const { total: chargesTotal, charges, loading: chargesLoading, refresh: refreshCharges } = useChargesFixes();
   const { goal, loading: goalLoading, save: saveGoal, refresh: refreshGoal } = useObjectifEpargne();
-  const { data: catData, totalDepenses, refresh: refreshCat } = useCategoriesMois();
+  const { data: catData, totalDepenses, loading: catLoading, refresh: refreshCat } = useCategoriesMois();
   const { data: trendData, loading: trendLoading, refresh: refreshTrend } = useTrend30j();
   const { data: cmpData, loading: cmpLoading, refresh: refreshCmp } = useComparaisonMois();
 
@@ -399,11 +399,13 @@ function PersoDashboard() {
 
   const salary = persoSetup.netSalary;
   const savingsGoal = goal?.montant_cible ?? 0;
-  const available = salary - chargesTotal - savingsGoal;
+  // Same formula as Karl: salary − fixed charges − savings goal − variable spending
+  const available = salary - chargesTotal - savingsGoal - totalDepenses;
 
+  const budgetEnvelope = salary - chargesTotal - savingsGoal; // total variable budget (without spending)
   const budgetPct =
-    available > 0 && catData.length > 0
-      ? Math.round((totalDepenses / available) * 100)
+    budgetEnvelope > 0 && catData.length > 0
+      ? Math.round((totalDepenses / budgetEnvelope) * 100)
       : 0;
 
   const monthLabel = new Date().toLocaleDateString('fr-FR', { month: 'long' });
@@ -437,11 +439,11 @@ function PersoDashboard() {
 
       {/* Hero */}
       <Card variant="hero" style={styles.heroCard}>
-        <Text style={styles.heroLabel}>Disponible ce mois</Text>
+        <Text style={styles.heroLabel}>Il te reste ce mois</Text>
         <Text style={styles.heroAmount}>
-          {chargesLoading || goalLoading ? '— ' : available.toLocaleString('fr-FR')} €
+          {chargesLoading || goalLoading || catLoading ? '— ' : available.toLocaleString('fr-FR')} €
         </Text>
-        <Text style={styles.heroSub}>salaire − charges − épargne</Text>
+        <Text style={styles.heroSub}>après charges, épargne et dépenses</Text>
         <View style={styles.heroPills}>
           <View style={styles.heroPill}>
             <Text style={styles.heroPillText}>

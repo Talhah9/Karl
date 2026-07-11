@@ -141,11 +141,14 @@ Deno.serve(async (req: Request) => {
       message: string;
       history: { role: string; content: string }[];
       profile?: string;
+      persoSetup?: { netSalary: number; payday: number; fixedExpenses: number };
+      freelanceSetup?: { status: string; monthlyRevenue: number; versementLiberatoire: boolean; acre: boolean };
       confirmed_transaction?: { montant: number; categorie: string; type: string; description?: string };
       confirmed_modification?: { id: string; montant: number; categorie: string; type: string; description?: string };
       confirmed_deletion?: { id: string };
     };
-    const { message, history = [], profile = "freelance", confirmed_transaction, confirmed_modification, confirmed_deletion } = body;
+    const { message, history = [], profile = "freelance", persoSetup, freelanceSetup, confirmed_transaction, confirmed_modification, confirmed_deletion } = body;
+    const userCtx: UserContext = { profile, persoSetup, freelanceSetup };
     const systemPrompt = buildSystemPrompt(profile);
 
     // --- Rate limiting ---
@@ -455,7 +458,7 @@ Deno.serve(async (req: Request) => {
       // Execute read-only tools deterministically
       let toolResult: unknown;
       try {
-        toolResult = await executeTool(supabase, userId, toolName, input as Record<string, unknown>);
+        toolResult = await executeTool(supabase, userId, toolName, input as Record<string, unknown>, userCtx);
       } catch (err) {
         toolResult = { error: String(err) };
       }
@@ -589,49 +592,59 @@ function montantMentionnedByUser(
   return values.some((v) => Math.abs(v - montant) < 0.01);
 }
 
+interface UserContext {
+  profile: string;
+  persoSetup?: { netSalary: number; payday: number; fixedExpenses: number };
+  freelanceSetup?: { status: string; monthlyRevenue: number; versementLiberatoire: boolean; acre: boolean };
+}
+
 async function executeTool(
   supabase: ReturnType<typeof createClient>,
   userId: string,
   toolName: string,
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
+  ctx: UserContext = { profile: "freelance" }
 ): Promise<unknown> {
   switch (toolName) {
     case "calculer_solde_disponible": {
       const now = new Date();
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 
-      const [{ data: profile }, { data: transactions }] = await Promise.all([
-        supabase.from("profiles").select("profil_type, revenu_moyen_mensuel, statut_juridique").eq("id", userId).maybeSingle(),
+      // Same formula as the dashboard: salary − charges_fixes − objectif_épargne − dépenses_variables
+      const [{ data: txData }, { data: chargesData }, { data: goalData }] = await Promise.all([
         supabase.from("transactions").select("montant, type").eq("user_id", userId).gte("date", monthStart),
+        supabase.from("charges_fixes").select("montant").eq("user_id", userId),
+        supabase.from("objectifs_epargne").select("montant_cible").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
 
-      const txs = (transactions ?? []) as { montant: number; type: string }[];
+      const txs = (txData ?? []) as { montant: number; type: string }[];
       const totalRevenu = txs.filter((t) => t.type === "revenu").reduce((s, t) => s + Number(t.montant), 0);
       const totalDepense = txs.filter((t) => t.type === "depense").reduce((s, t) => s + Number(t.montant), 0);
+      const chargesTotal = (chargesData ?? []).reduce((s: number, c: any) => s + Number(c.montant), 0);
+      const savingsGoal = Number((goalData as any)?.montant_cible ?? 0);
 
-      const p = profile as any;
-      if (p?.profil_type === "entrepreneur") {
+      if (ctx.profile === "freelance") {
         const rates: Record<string, number> = { bnc: 0.246, bic: 0.212, vente: 0.123, other: 0.246 };
-        const rate = rates[p.statut_juridique ?? "other"] ?? 0.246;
-        const charges = Math.round(totalRevenu * rate);
-        const solde = totalRevenu - charges - totalDepense;
+        const rate = rates[ctx.freelanceSetup?.status ?? "other"] ?? 0.246;
+        const chargesProvisionnees = Math.round(totalRevenu * rate);
+        const solde = totalRevenu - chargesProvisionnees - totalDepense;
         return {
           solde_disponible: solde,
-          detail: `Revenus: ${totalRevenu}€ | Charges (${Math.round(rate * 100)}%): ${charges}€ | Dépenses: ${totalDepense}€ | Disponible: ${solde}€`,
+          detail: `Encaissé: ${totalRevenu}€ | Charges provisionnées (${Math.round(rate * 100)}%): ${chargesProvisionnees}€ | Dépenses: ${totalDepense}€ | Disponible: ${solde}€`,
         };
       } else {
-        const salaire = Number(p?.revenu_moyen_mensuel ?? 0);
-        const solde = salaire - totalDepense;
+        const salaire = ctx.persoSetup?.netSalary ?? 0;
+        const solde = salaire - chargesTotal - savingsGoal - totalDepense;
         return {
           solde_disponible: solde,
-          detail: `Salaire: ${salaire}€ | Dépenses ce mois: ${totalDepense}€ | Disponible: ${solde}€`,
+          detail: `Salaire: ${salaire}€ | Charges fixes: ${chargesTotal}€ | Épargne réservée: ${savingsGoal}€ | Dépenses variables: ${totalDepense}€ | Reste: ${solde}€`,
         };
       }
     }
 
     case "verifier_si_achat_possible": {
       const montantAchat = Number(input.montant);
-      const result = await executeTool(supabase, userId, "calculer_solde_disponible", {}) as { solde_disponible: number };
+      const result = await executeTool(supabase, userId, "calculer_solde_disponible", {}, ctx) as { solde_disponible: number };
       const apres = result.solde_disponible - montantAchat;
       return {
         possible: apres >= 0,

@@ -80,7 +80,7 @@ function TypingBubble() {
 }
 
 export default function ChatScreen() {
-  const { profile, authReady } = useApp();
+  const { profile, authReady, persoSetup, freelanceSetup } = useApp();
   const accent = profile === 'perso' ? C.purple : C.lime;
   const suggestions = profile === 'perso' ? SUGGESTIONS_PERSO : SUGGESTIONS_FREELANCE;
 
@@ -137,7 +137,13 @@ export default function ChatScreen() {
     setIsLoading(true);
 
     try {
-      const result = await callKarlChat({ message: trimmed, history: buildHistory(), profile });
+      const result = await callKarlChat({
+        message: trimmed,
+        history: buildHistory(),
+        profile,
+        persoSetup: profile === 'perso' ? persoSetup : undefined,
+        freelanceSetup: profile === 'freelance' ? freelanceSetup : undefined,
+      });
 
       if (result.type === 'paywall') {
         addMessage('karl', result.message);

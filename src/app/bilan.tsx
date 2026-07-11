@@ -298,46 +298,82 @@ export default function BilanScreen() {
         {renderCard()}
       </ViewShot>
 
-      {/* Overlay — siblings above ViewShot, not captured */}
-      <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-        {/* Progress dots */}
-        <View
-          pointerEvents="none"
-          style={[oS.dotsRow, { top: insets.top + 12 }]}
-        >
-          {cards.map((_, i) => (
-            <View
-              key={i}
-              style={[
-                oS.dot,
-                { flex: 1, backgroundColor: i <= cardIdx ? accent : 'rgba(255,255,255,0.28)' },
-              ]}
-            />
-          ))}
-        </View>
-
-        {/* Close button */}
-        <Pressable
-          onPress={() => router.back()}
-          style={[oS.closeBtn, { top: insets.top + 8 }]}
-        >
-          <Text style={oS.closeTxt}>✕</Text>
-        </Pressable>
-
-        {/* Tap areas — left go back, right go next */}
-        <View pointerEvents="box-none" style={oS.tapRow}>
-          <Pressable style={{ flex: 1 }} onPress={goBack} />
-          <Pressable style={{ flex: 1 }} onPress={goNext} />
-        </View>
-
-        {/* Share button */}
-        <Pressable
-          onPress={handleShare}
-          style={[oS.shareBtn, { backgroundColor: accent, bottom: insets.bottom + 28 }]}
-        >
-          <Text style={oS.shareTxt}>{sharing ? '…' : '↗  Partager ce bilan'}</Text>
-        </Pressable>
+      {/* Progress dots — not captured, directly on root */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: insets.top + 14,
+          left: 16,
+          right: 58,
+          flexDirection: 'row',
+          gap: 5,
+        }}
+      >
+        {cards.map((_, i) => (
+          <View
+            key={i}
+            style={{
+              flex: 1,
+              height: 3,
+              borderRadius: 2,
+              backgroundColor: i <= cardIdx ? accent : 'rgba(255,255,255,0.28)',
+            }}
+          />
+        ))}
       </View>
+
+      {/* Close button */}
+      <Pressable
+        onPress={() => router.back()}
+        style={{
+          position: 'absolute',
+          top: insets.top + 10,
+          right: 16,
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: 'rgba(255,255,255,0.12)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={oS.closeTxt}>✕</Text>
+      </Pressable>
+
+      {/* Tap areas — left go back, right go next */}
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: 'absolute',
+          top: insets.top + 60,
+          bottom: insets.bottom + 100,
+          left: 0,
+          right: 0,
+          flexDirection: 'row',
+        }}
+      >
+        <Pressable style={{ flex: 1 }} onPress={goBack} />
+        <Pressable style={{ flex: 1 }} onPress={goNext} />
+      </View>
+
+      {/* Share button */}
+      <Pressable
+        onPress={handleShare}
+        style={{
+          position: 'absolute',
+          left: 24,
+          right: 24,
+          bottom: insets.bottom + 28,
+          height: 52,
+          borderRadius: 26,
+          backgroundColor: accent,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={oS.shareTxt}>{sharing ? '…' : '↗  Partager ce bilan'}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -351,6 +387,7 @@ const cS = StyleSheet.create({
     paddingTop: 96,
     paddingBottom: 44,
     justifyContent: 'space-between',
+    zIndex: 1, // always above glow circles (position: absolute) on iOS
   },
   mono: {
     fontFamily: 'SpaceMono_400Regular',
@@ -397,50 +434,12 @@ const cS = StyleSheet.create({
   },
 });
 
-// ─── Overlay styles ───────────────────────────────────────────────────────────
+// ─── Shared overlay text styles ───────────────────────────────────────────────
 const oS = StyleSheet.create({
-  dotsRow: {
-    position: 'absolute',
-    left: 16,
-    right: 58,
-    flexDirection: 'row',
-    gap: 5,
-  },
-  dot: {
-    height: 3,
-    borderRadius: 2,
-  },
-  closeBtn: {
-    position: 'absolute',
-    right: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   closeTxt: {
     fontFamily: 'Sora_400Regular',
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
-  },
-  tapRow: {
-    position: 'absolute',
-    top: 80,
-    bottom: 120,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-  },
-  shareBtn: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   shareTxt: {
     fontFamily: 'Sora_700Bold',

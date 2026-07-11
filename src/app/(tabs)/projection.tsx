@@ -1,13 +1,15 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { KarlMascot } from '@/components/ui/KarlMascot';
 import { C } from '@/constants/colors';
 import { useApp } from '@/context/AppContext';
+import { useProjectionPerso, type WeekData } from '@/hooks/useProjectionPerso';
 
-// ─── Simple bar chart ─────────────────────────────────────────────────────────
+// ─── Bar chart ────────────────────────────────────────────────────────────────
 function BarChart({
   bars,
   height = 120,
@@ -22,7 +24,7 @@ function BarChart({
           <View style={{ flex: 1, justifyContent: 'flex-end' }}>
             <View
               style={{
-                height: `${b.pct * 100}%`,
+                height: `${Math.max(b.pct * 100, 2)}%`,
                 backgroundColor: b.color,
                 borderRadius: 7,
                 borderBottomLeftRadius: 3,
@@ -38,7 +40,7 @@ function BarChart({
   );
 }
 
-// ─── Freelance ────────────────────────────────────────────────────────────────
+// ─── Freelance (still projections — bank data pending) ────────────────────────
 function FreelanceProjection() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -49,67 +51,108 @@ function FreelanceProjection() {
 
       <Card variant="hero" style={{ gap: 2 }}>
         <Text style={styles.heroMono}>Dans 3 mois, de côté</Text>
-        <Text style={styles.heroAmount}>4 260 €</Text>
-        <Text style={styles.heroSub}>de quoi encaisser T3 les doigts dans le nez</Text>
-      </Card>
-
-      <Card style={{ gap: 12 }}>
-        <View style={styles.legendRow}>
-          <Text style={styles.mono}>Épargne cumulée</Text>
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: C.lime }]} />
-              <Text style={styles.legendText}>Actuel</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: C.warm }]} />
-              <Text style={styles.legendText}>Mois creux</Text>
-            </View>
-          </View>
-        </View>
-        <BarChart
-          bars={[
-            { label: 'Août', pct: 0.38, color: C.lime },
-            { label: 'Sept', pct: 0.64, color: C.lime },
-            { label: 'Oct', pct: 0.92, color: C.lime },
-          ]}
-        />
+        <Text style={styles.heroAmount}>— €</Text>
+        <Text style={styles.heroSub}>connecte ton compte pour activer les projections</Text>
       </Card>
 
       <Card
         style={{
-          backgroundColor: 'rgba(255,122,77,0.10)',
-          borderColor: 'rgba(255,122,77,0.28)',
+          backgroundColor: 'rgba(196,245,66,0.06)',
+          borderColor: 'rgba(196,245,66,0.22)',
           flexDirection: 'row',
           gap: 12,
           alignItems: 'flex-start',
         }}
       >
-        <KarlMascot size={34} color={C.warm} />
+        <KarlMascot size={34} color={C.lime} />
         <Text style={styles.karlText}>
-          Si tu passes un mois creux (−30 %), il te{' '}
-          <Text style={styles.warm}>manquera 480 €</Text> pour l'URSSAF de T3. On anticipe maintenant ?
+          Les projections freelance arrivent avec la connexion bancaire.{' '}
+          <Text style={{ fontFamily: 'Sora_700Bold', color: C.lime }}>Bientôt disponible.</Text>
         </Text>
       </Card>
 
-      <View style={styles.field}>
-        <View>
-          <Text style={styles.fieldVal}>Objectif conseillé</Text>
-          <Text style={styles.fieldSub}>pour finir l'année serein</Text>
-        </View>
-        <Text style={styles.fieldAmount}>
-          850 €<Text style={styles.fieldAmountUnit}>/mois</Text>
-        </Text>
-      </View>
-
       <Text style={styles.legal}>Estimation basée sur tes 3 derniers mois · pas une boule de cristal 🔮</Text>
-      <Button variant="ghost">Ajuster mon objectif</Button>
     </ScrollView>
   );
 }
 
 // ─── Perso ────────────────────────────────────────────────────────────────────
 function PersoProjection() {
+  const { data, loading, refresh } = useProjectionPerso();
+
+  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+
+  if (loading || !data) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={C.purple} />
+      </View>
+    );
+  }
+
+  const {
+    budgetEnvelope,
+    totalDepenses,
+    paydayLabel,
+    projectedRemaining,
+    projectedMonthSpending,
+    savingsGoal,
+    savingsGoalLabel,
+    weeks,
+    weeklyBudget,
+    daysElapsed,
+  } = data;
+
+  const hasData = totalDepenses > 0;
+
+  // Projected hero text
+  const projectedRemainingRounded = Math.round(projectedRemaining);
+  const heroAmount = hasData
+    ? `${projectedRemainingRounded.toLocaleString('fr-FR')} €`
+    : '— €';
+  const heroSub = hasData
+    ? projectedRemainingRounded >= 0
+      ? `de quoi finir le mois tranquille 🙌`
+      : `attention, trajectoire déficitaire ⚠️`
+    : 'enregistre des dépenses pour voir ta projection';
+
+  // Karl insight
+  const karlText = (() => {
+    if (!hasData) return "Dis-moi ce que tu dépenses et je te dirai comment tu termines le mois.";
+    if (projectedRemaining < 0) {
+      const deficit = Math.abs(Math.round(projectedRemaining));
+      const adjust = Math.round(deficit / Math.max(1, data.daysInMonth - daysElapsed));
+      return `Au rythme actuel, tu finis ${deficit.toLocaleString('fr-FR')} € dans le rouge. Réduis d'environ ${adjust} €/jour les prochains jours pour équilibrer.`;
+    }
+    if (projectedRemaining < budgetEnvelope * 0.1) {
+      return `C'est serré — il te reste ~${Math.round(projectedRemaining).toLocaleString('fr-FR')} € de marge. Surveille les petites dépenses d'ici ${paydayLabel}.`;
+    }
+    return `Sur ta lancée, il te restera ~${Math.round(projectedRemaining).toLocaleString('fr-FR')} € fin de mois. Bien joué. 💪`;
+  })();
+
+  const isKarlWarn = projectedRemaining < budgetEnvelope * 0.1;
+
+  // Bar chart data: actual weeks + projected future weeks
+  const barData = weeks.map((w: WeekData) => {
+    if (w.isFuture) {
+      // Project: spend at the same rate as elapsed days
+      const projectedWeekSpending = weeklyBudget * 0.85; // conservative estimate
+      const projectedPct = weeklyBudget > 0 ? projectedWeekSpending / weeklyBudget : 0;
+      return {
+        label: w.label,
+        pct: Math.min(projectedPct, 1),
+        color: C.purple,
+        opacity: 0.35,
+      };
+    }
+    return {
+      label: w.label,
+      pct: w.pct,
+      color: w.isOverBudget ? C.warm : C.purple,
+      opacity: 1,
+    };
+  });
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={{ gap: 3 }}>
@@ -118,63 +161,67 @@ function PersoProjection() {
       </View>
 
       <Card variant="hero" style={{ gap: 2 }}>
-        <Text style={styles.heroMono}>Le 26, il te restera</Text>
-        <Text style={styles.heroAmount}>210 €</Text>
-        <Text style={styles.heroSub}>de quoi finir le mois tranquille 🙌</Text>
+        <Text style={styles.heroMono}>{paydayLabel.charAt(0).toUpperCase() + paydayLabel.slice(1)}, il te restera</Text>
+        <Text style={[styles.heroAmount, !hasData && { color: C.dark, opacity: 0.4 }]}>{heroAmount}</Text>
+        <Text style={styles.heroSub}>{heroSub}</Text>
       </Card>
 
-      <Card style={{ gap: 12 }}>
-        <View style={styles.legendRow}>
-          <Text style={styles.mono}>Reste à vivre par semaine</Text>
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: C.purple }]} />
-              <Text style={styles.legendText}>Prévu</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: C.warm }]} />
-              <Text style={styles.legendText}>Réel</Text>
+      {hasData && (
+        <Card style={{ gap: 12 }}>
+          <View style={styles.legendRow}>
+            <Text style={styles.mono}>Reste à vivre par semaine</Text>
+            <View style={styles.legend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: C.purple }]} />
+                <Text style={styles.legendText}>Réel</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: C.warm }]} />
+                <Text style={styles.legendText}>Dépassé</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: C.purple, opacity: 0.35 }]} />
+                <Text style={styles.legendText}>Projeté</Text>
+              </View>
             </View>
           </View>
-        </View>
-        <BarChart
-          bars={[
-            { label: 'S1', pct: 0.7, color: C.purple },
-            { label: 'S2', pct: 0.92, color: C.warm },
-            { label: 'S3', pct: 0.55, color: C.purple, opacity: 0.5 },
-            { label: 'S4', pct: 0.4, color: C.purple, opacity: 0.5 },
-          ]}
-        />
-      </Card>
+          <BarChart bars={barData} />
+          <Text style={[styles.chartSub]}>
+            Budget semaine : {Math.round(weeklyBudget).toLocaleString('fr-FR')} €
+          </Text>
+        </Card>
+      )}
 
       <Card
         style={{
-          backgroundColor: 'rgba(255,122,77,0.10)',
-          borderColor: 'rgba(255,122,77,0.28)',
+          backgroundColor: isKarlWarn
+            ? 'rgba(255,122,77,0.10)'
+            : 'rgba(167,139,250,0.07)',
+          borderColor: isKarlWarn
+            ? 'rgba(255,122,77,0.28)'
+            : 'rgba(167,139,250,0.22)',
           flexDirection: 'row',
           gap: 12,
           alignItems: 'flex-start',
         }}
       >
-        <KarlMascot size={34} color={C.warm} />
-        <Text style={styles.karlText}>
-          Au rythme de la semaine 2, tu finis{' '}
-          <Text style={styles.warm}>−120 €</Text> dans le rouge. Cale 30 €/semaine sur les sorties et c'est bon.
-        </Text>
+        <KarlMascot size={34} color={isKarlWarn ? C.warm : C.purple} />
+        <Text style={styles.karlText}>{karlText}</Text>
       </Card>
 
-      <View style={styles.field}>
-        <View>
-          <Text style={styles.fieldVal}>Épargne conseillée</Text>
-          <Text style={styles.fieldSub}>pour ton objectif vacances</Text>
+      {savingsGoal > 0 && (
+        <View style={styles.field}>
+          <View>
+            <Text style={styles.fieldVal}>Objectif d'épargne</Text>
+            <Text style={styles.fieldSub}>{savingsGoalLabel}</Text>
+          </View>
+          <Text style={[styles.fieldAmount, { color: C.purple }]}>
+            {savingsGoal.toLocaleString('fr-FR')} €<Text style={styles.fieldAmountUnit}>/mois</Text>
+          </Text>
         </View>
-        <Text style={[styles.fieldAmount, { color: C.purple }]}>
-          200 €<Text style={styles.fieldAmountUnit}>/mois</Text>
-        </Text>
-      </View>
+      )}
 
-      <Text style={styles.legal}>Estimation basée sur tes 3 derniers mois · pas une boule de cristal 🔮</Text>
-      <Button variant="ghost">Ajuster mon budget</Button>
+      <Text style={styles.legal}>Projection linéaire sur {daysElapsed} jour{daysElapsed > 1 ? 's' : ''} · pas une boule de cristal 🔮</Text>
     </ScrollView>
   );
 }
@@ -225,10 +272,17 @@ const styles = StyleSheet.create({
   heroSub: { fontFamily: 'Sora_400Regular', fontSize: 12, color: 'rgba(20,18,16,0.7)' },
 
   legendRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  legend: { flexDirection: 'row', gap: 12 },
+  legend: { flexDirection: 'row', gap: 10 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 9, height: 9, borderRadius: 2 },
   legendText: { fontFamily: 'Sora_400Regular', fontSize: 10, color: C.text },
+  chartSub: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 9,
+    color: C.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
 
   chartRow: { flexDirection: 'row', gap: 9, alignItems: 'flex-end' },
   chartCol: { flex: 1, gap: 6, alignItems: 'center', height: '100%' },
@@ -246,7 +300,6 @@ const styles = StyleSheet.create({
     color: C.text,
     flex: 1,
   },
-  warm: { fontFamily: 'Sora_700Bold', color: C.warm },
 
   field: {
     backgroundColor: C.surf,
@@ -264,7 +317,6 @@ const styles = StyleSheet.create({
   fieldAmount: {
     fontFamily: 'Sora_800ExtraBold',
     fontSize: 20,
-    color: C.lime,
     letterSpacing: -0.5,
   },
   fieldAmountUnit: { fontFamily: 'Sora_400Regular', fontSize: 11, color: C.muted },
