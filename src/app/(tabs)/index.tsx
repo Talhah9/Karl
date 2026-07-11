@@ -18,6 +18,7 @@ import { useTrend30j, type TrendDay } from '@/hooks/useTrend30j';
 import { useObjectifEpargne, type ObjectifEpargne } from '@/hooks/useObjectifEpargne';
 import { useChargesFixes } from '@/hooks/useChargesFixes';
 import { useCategoriesMois } from '@/hooks/useCategoriesMois';
+import { useRecentTransactions } from '@/hooks/useRecentTransactions';
 import { SpendingChart } from '@/components/ui/SpendingChart';
 
 import { Button } from '@/components/ui/Button';
@@ -30,6 +31,7 @@ import { C, getChargeRate } from '@/constants/colors';
 import { getCatEmoji, getCatLabel } from '@/constants/categories';
 import { useApp } from '@/context/AppContext';
 import { getBudgetCycle } from '@/utils/budgetCycle';
+import type { Transaction } from '@/hooks/useRecentTransactions';
 
 // ─── Mock data (freelance only — real data pending bank connect) ──────────────
 const MOCK_FREELANCE = {
@@ -250,6 +252,53 @@ function TrendCard({ accent, data, loading }: { accent: string; data: TrendDay[]
   );
 }
 
+// ─── Transactions récentes card ───────────────────────────────────────────────
+function fmtDateShort(iso: string) {
+  return new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+function TransactionsCard({ txs, accent, loading }: { txs: Transaction[]; accent: string; loading: boolean }) {
+  if (loading || txs.length === 0) return null;
+
+  const preview = txs.slice(0, 7);
+
+  return (
+    <Card style={{ gap: 0, paddingHorizontal: 0, paddingVertical: 0, overflow: 'hidden' }}>
+      <View style={txStyles.header}>
+        <Text style={txStyles.mono}>Transactions récentes</Text>
+        <Pressable onPress={() => router.push('/transactions')}>
+          <Text style={[txStyles.mono, { color: accent }]}>Voir tout →</Text>
+        </Pressable>
+      </View>
+      {preview.map((tx, i) => (
+        <Pressable
+          key={tx.id}
+          style={[txStyles.row, i < preview.length - 1 && txStyles.rowBorder]}
+          onPress={() => router.push(`/transaction/${tx.id}`)}
+        >
+          <View style={txStyles.rowLeft}>
+            <Text style={txStyles.emoji}>{getCatEmoji(tx.categorie)}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={txStyles.label} numberOfLines={1}>
+                {getCatLabel(tx.categorie)}{tx.exceptionnelle ? ' ⚡' : ''}
+              </Text>
+              {tx.description ? (
+                <Text style={txStyles.desc} numberOfLines={1}>{tx.description}</Text>
+              ) : null}
+            </View>
+          </View>
+          <View style={txStyles.rowRight}>
+            <Text style={[txStyles.amount, { color: tx.type === 'depense' ? C.text : accent }]}>
+              {tx.type === 'depense' ? '−' : '+'} {tx.montant.toLocaleString('fr-FR')} €
+            </Text>
+            <Text style={txStyles.date}>{fmtDateShort(tx.date)}</Text>
+          </View>
+        </Pressable>
+      ))}
+    </Card>
+  );
+}
+
 // ─── Freelance Dashboard ──────────────────────────────────────────────────────
 function FreelanceDashboard() {
   const { userName, freelanceSetup, hasData } = useApp();
@@ -280,7 +329,12 @@ function FreelanceDashboard() {
           <Text style={styles.dateText}>Lundi 7 juillet</Text>
           <Text style={styles.greeting}>Salut {userName} 👋</Text>
         </View>
-        <KarlMascot size={40} smug />
+        <View style={styles.headerRight}>
+          <Pressable onPress={() => router.push('/settings')} hitSlop={10}>
+            <Text style={styles.gearIcon}>⚙</Text>
+          </Pressable>
+          <KarlMascot size={40} smug />
+        </View>
       </View>
 
       {/* Hero card */}
@@ -387,6 +441,7 @@ function PersoDashboard() {
   const { data: catData, totalDepenses, loading: catLoading, refresh: refreshCat } = useCategoriesMois();
   const { data: trendData, loading: trendLoading, refresh: refreshTrend } = useTrend30j();
   const { data: cmpData, loading: cmpLoading, refresh: refreshCmp } = useComparaisonMois();
+  const { data: txData, loading: txLoading, refresh: refreshTx } = useRecentTransactions(7);
 
   useFocusEffect(
     useCallback(() => {
@@ -395,7 +450,8 @@ function PersoDashboard() {
       refreshCat();
       refreshTrend();
       refreshCmp();
-    }, [refreshCharges, refreshGoal, refreshCat, refreshTrend, refreshCmp])
+      refreshTx();
+    }, [refreshCharges, refreshGoal, refreshCat, refreshTrend, refreshCmp, refreshTx])
   );
 
   const salary = persoSetup.netSalary;
@@ -436,7 +492,12 @@ function PersoDashboard() {
             <Tag variant="purple">Perso</Tag>
           </View>
         </View>
-        <KarlMascot size={40} color={C.purple} smug />
+        <View style={styles.headerRight}>
+          <Pressable onPress={() => router.push('/settings')} hitSlop={10}>
+            <Text style={styles.gearIcon}>⚙</Text>
+          </Pressable>
+          <KarlMascot size={40} color={C.purple} smug />
+        </View>
       </View>
 
       {/* Hero */}
@@ -534,6 +595,8 @@ function PersoDashboard() {
           </View>
         </Card>
       )}
+
+      <TransactionsCard txs={txData} accent={C.purple} loading={txLoading} />
 
       <TrendCard accent={C.purple} data={trendData} loading={trendLoading} />
 
@@ -788,6 +851,8 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 20, paddingTop: 6, paddingBottom: 16, gap: 14 },
 
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  gearIcon: { fontFamily: 'Sora_400Regular', fontSize: 20, color: C.muted },
   dateText: { fontFamily: 'Sora_400Regular', fontSize: 12, color: C.muted },
   greeting: { fontFamily: 'Sora_700Bold', fontSize: 19, color: C.text },
 
@@ -1123,6 +1188,45 @@ const tutStyles = StyleSheet.create({
   skip: {
     fontFamily: 'Sora_400Regular',
     fontSize: 13,
+    color: C.muted,
+  },
+});
+
+const txStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingTop: 13,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.line,
+  },
+  mono: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 9,
+    color: C.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+  },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 11, flex: 1 },
+  emoji: { fontSize: 18 },
+  label: { fontFamily: 'Sora_600SemiBold', fontSize: 12.5, color: C.text },
+  desc: { fontFamily: 'Sora_400Regular', fontSize: 10.5, color: C.muted, marginTop: 1 },
+  rowRight: { alignItems: 'flex-end', gap: 2 },
+  amount: { fontFamily: 'Sora_700Bold', fontSize: 13 },
+  date: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 8.5,
     color: C.muted,
   },
 });

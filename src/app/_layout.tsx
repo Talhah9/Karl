@@ -46,11 +46,16 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <AppProvider>
         <View style={styles.root}>
-          <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="onboarding" />
-            <Stack.Screen name="(tabs)" />
+          <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+            <Stack.Screen name="index" options={{ animation: 'fade' }} />
+            <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+            <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
             <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="settings" />
+            <Stack.Screen name="transaction" />
+            <Stack.Screen name="transactions" />
+            <Stack.Screen name="bilan" />
+            <Stack.Screen name="export" />
           </Stack>
         </View>
       </AppProvider>
