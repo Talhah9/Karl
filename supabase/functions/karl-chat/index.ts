@@ -260,6 +260,7 @@ Deno.serve(async (req: Request) => {
         message: "Tu envoies trop de messages. Limite de 60 messages par 24h atteinte. Reviens plus tard 🕐",
         credits_restants: credits.credits_restants,
         credits_max: credits.credits_max,
+        abonne: credits.abonne,
       });
     }
 
@@ -268,13 +269,21 @@ Deno.serve(async (req: Request) => {
       const nextRechargeAt = new Date(new Date(credits.derniere_recharge).getTime() + RECHARGE_INTERVAL_MS);
       const minsLeft = Math.max(1, Math.ceil((nextRechargeAt.getTime() - now.getTime()) / 60000));
       const timeLabel = minsLeft >= 60 ? `${Math.ceil(minsLeft / 60)}h` : `${minsLeft} min`;
+      if (credits.abonne) {
+        return jsonResponse({
+          type: "rate_limited",
+          message: `Je souffle 2 minutes et je reviens. 😮‍💨 Recharge dans ${timeLabel}.`,
+          credits_restants: 0,
+          credits_max: credits.credits_max,
+          abonne: true,
+        });
+      }
       return jsonResponse({
         type: "paywall",
-        message: credits.abonne
-          ? `Plus de crédits pour l'instant. Prochaine recharge dans ${timeLabel}. ⏳`
-          : `Plus de crédits. Prochaine recharge dans ${timeLabel} (+${FREE_RECHARGE} crédits). Passe à Karl Pro pour 25 crédits toutes les 6h 🚀`,
+        message: `Plus de crédits. Prochaine recharge dans ${timeLabel} (+${FREE_RECHARGE} crédits). Passe à Karl Pro pour 25 crédits toutes les 6h 🚀`,
         credits_restants: 0,
         credits_max: credits.credits_max,
+        abonne: false,
       });
     }
 
@@ -315,7 +324,7 @@ Deno.serve(async (req: Request) => {
       );
       await saveConversation(supabase, userId, message || "confirmation", ackText);
       const creditsAfter = await useCredit();
-      return jsonResponse({ type: "message", message: ackText, credits_restants: creditsAfter, credits_max: credits.credits_max });
+      return jsonResponse({ type: "message", message: ackText, credits_restants: creditsAfter, credits_max: credits.credits_max, abonne: credits.abonne });
     }
 
     // --- Modification confirmée ---
@@ -338,7 +347,7 @@ Deno.serve(async (req: Request) => {
       );
       await saveConversation(supabase, userId, message || "modification", ackText);
       const creditsAfter = await useCredit();
-      return jsonResponse({ type: "message", message: ackText, credits_restants: creditsAfter, credits_max: credits.credits_max });
+      return jsonResponse({ type: "message", message: ackText, credits_restants: creditsAfter, credits_max: credits.credits_max, abonne: credits.abonne });
     }
 
     // --- Suppression confirmée ---
@@ -358,7 +367,7 @@ Deno.serve(async (req: Request) => {
       );
       await saveConversation(supabase, userId, message || "suppression", ackText);
       const creditsAfter = await useCredit();
-      return jsonResponse({ type: "message", message: ackText, credits_restants: creditsAfter, credits_max: credits.credits_max });
+      return jsonResponse({ type: "message", message: ackText, credits_restants: creditsAfter, credits_max: credits.credits_max, abonne: credits.abonne });
     }
 
     // --- Catégories apprises (injection dans le prompt) ---
@@ -418,7 +427,7 @@ Deno.serve(async (req: Request) => {
             `C'était combien exactement ? Je vais pas inventer le prix 😅`;
           await saveConversation(supabase, userId, message, clarifyText);
           const creditsAfter = await useCredit();
-          return jsonResponse({ type: "message", message: clarifyText, credits_restants: creditsAfter, credits_max: credits.credits_max });
+          return jsonResponse({ type: "message", message: clarifyText, credits_restants: creditsAfter, credits_max: credits.credits_max, abonne: credits.abonne });
         }
 
         const confirmText = await getConfirmationText(
@@ -442,6 +451,7 @@ Deno.serve(async (req: Request) => {
           pending: { action: "add", ...input },
           credits_restants: creditsAfter,
           credits_max: credits.credits_max,
+          abonne: credits.abonne,
         });
       }
 
@@ -514,6 +524,7 @@ Deno.serve(async (req: Request) => {
           },
           credits_restants: creditsAfter,
           credits_max: credits.credits_max,
+          abonne: credits.abonne,
         });
       }
 
@@ -580,6 +591,7 @@ Deno.serve(async (req: Request) => {
           },
           credits_restants: creditsAfter,
           credits_max: credits.credits_max,
+          abonne: credits.abonne,
         });
       }
 
@@ -618,7 +630,7 @@ Deno.serve(async (req: Request) => {
 
     await saveConversation(supabase, userId, message, finalText);
     const creditsAfter = await useCredit();
-    return jsonResponse({ type: "message", message: finalText, credits_restants: creditsAfter, credits_max: credits.credits_max });
+    return jsonResponse({ type: "message", message: finalText, credits_restants: creditsAfter, credits_max: credits.credits_max, abonne: credits.abonne });
 
   } catch (err) {
     console.error("karl-chat error:", err);
