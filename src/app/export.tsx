@@ -2,12 +2,13 @@ import { router } from 'expo-router';
 import { File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/ui/Card';
 import { KarlMascot } from '@/components/ui/KarlMascot';
+import { Tag } from '@/components/ui/Tag';
 import { C } from '@/constants/colors';
 import { getCatLabel } from '@/constants/categories';
 import { useApp } from '@/context/AppContext';
@@ -165,10 +166,76 @@ ${noteHtml}
 </html>`;
 }
 
+function ProTeaser({ accent }: { accent: string }) {
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.nav}>
+        <Pressable onPress={() => router.back()}>
+          <Text style={styles.navClose}>✕</Text>
+        </Pressable>
+        <Text style={styles.navTitle}>Exporter mes données</Text>
+        <View style={{ width: 32 }} />
+      </View>
+      <View style={{ flex: 1, paddingHorizontal: 28, justifyContent: 'center', gap: 28 }}>
+        <View style={{ alignItems: 'center', gap: 16 }}>
+          <KarlMascot size={66} smug color={accent} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontFamily: 'Sora_800ExtraBold', fontSize: 24, color: C.text, letterSpacing: -0.8 }}>Export CSV / PDF</Text>
+            <Tag variant="lime">PRO</Tag>
+          </View>
+        </View>
+        <View style={{ gap: 12 }}>
+          <Text style={{ fontFamily: 'Sora_400Regular', fontSize: 14, color: C.muted, lineHeight: 22, textAlign: 'center' }}>
+            Exporte toutes tes transactions en CSV pour Excel ou en PDF mis en page pour ton comptable.
+          </Text>
+          <Text style={{ fontFamily: 'Sora_400Regular', fontSize: 14, color: C.muted, lineHeight: 22, textAlign: 'center' }}>
+            Choisis ta période, télécharge en un tap.
+          </Text>
+        </View>
+        <Pressable
+          onPress={() => router.push('/paywall')}
+          style={{ height: 52, borderRadius: 26, backgroundColor: accent, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ fontFamily: 'Sora_700Bold', fontSize: 15, color: '#141210' }}>Découvrir Karl Pro</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 export default function ExportScreen() {
   const { userName, profile } = useApp();
   const accent = profile === 'perso' ? C.purple : C.lime;
   const isFreelance = profile === 'freelance';
+
+  const [isPro, setIsPro] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const userId = session?.user?.id;
+      if (!userId) { setIsPro(false); return; }
+      const { data: credits } = await supabase
+        .from('credits_utilisateur')
+        .select('abonne')
+        .eq('user_id', userId)
+        .maybeSingle();
+      setIsPro(Boolean(credits?.abonne));
+    });
+  }, []);
+
+  if (isPro === null) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={accent} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isPro) {
+    return <ProTeaser accent={accent} />;
+  }
 
   const now = new Date();
   const curY = now.getFullYear();

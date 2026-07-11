@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -13,9 +13,11 @@ import * as Sharing from 'expo-sharing';
 
 import { KarlMascot } from '@/components/ui/KarlMascot';
 import { ProgressRing, RingLabel } from '@/components/ui/ProgressRing';
+import { Tag } from '@/components/ui/Tag';
 import { C } from '@/constants/colors';
 import { getCatEmoji, getCatLabel } from '@/constants/categories';
 import { useApp } from '@/context/AppContext';
+import { supabase } from '@/lib/supabase';
 import { useBilanMois, type BilanData } from '@/hooks/useBilanMois';
 
 type CardType = 'spending' | 'category' | 'savings' | 'funstat';
@@ -229,6 +231,57 @@ function FunstatCard({ data, accent }: { data: BilanData; accent: string }) {
   );
 }
 
+// ─── Pro teaser ───────────────────────────────────────────────────────────────
+function ProTeaser({ accent }: { accent: string }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={{ flex: 1, backgroundColor: '#100D0B', overflow: 'hidden' }}>
+      <Glow color={accent} size={420} opacity={0.18} top={-120} right={-100} />
+      <Glow color={accent} size={280} opacity={0.07} bottom={-60} left={-80} />
+      <Pressable
+        onPress={() => router.back()}
+        style={{
+          position: 'absolute',
+          top: insets.top + 10,
+          right: 16,
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: 'rgba(255,255,255,0.12)',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10,
+        }}
+      >
+        <Text style={{ fontFamily: 'Sora_400Regular', fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>✕</Text>
+      </Pressable>
+      <View style={{ flex: 1, paddingHorizontal: 32, paddingTop: insets.top + 60, paddingBottom: insets.bottom + 36, justifyContent: 'center', gap: 28, zIndex: 1 }}>
+        <View style={{ alignItems: 'center', gap: 16 }}>
+          <KarlMascot size={72} smug color={accent} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontFamily: 'Sora_800ExtraBold', fontSize: 28, color: '#fff', letterSpacing: -1 }}>Bilan du mois</Text>
+            <Tag variant="lime">PRO</Tag>
+          </View>
+        </View>
+        <View style={{ gap: 12 }}>
+          <Text style={{ fontFamily: 'Sora_400Regular', fontSize: 16, color: 'rgba(255,255,255,0.65)', lineHeight: 24, textAlign: 'center' }}>
+            Tes stats mensuelles mises en scène en cartes partageables — dépenses, catégorie du mois, objectif d'épargne.
+          </Text>
+          <Text style={{ fontFamily: 'Sora_400Regular', fontSize: 16, color: 'rgba(255,255,255,0.65)', lineHeight: 24, textAlign: 'center' }}>
+            Un vrai bilan à partager sur Insta ou avec ton comptable.
+          </Text>
+        </View>
+        <Pressable
+          onPress={() => router.push('/paywall')}
+          style={{ height: 54, borderRadius: 27, backgroundColor: accent, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ fontFamily: 'Sora_700Bold', fontSize: 16, color: '#141210' }}>Découvrir Karl Pro</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function BilanScreen() {
   const { profile } = useApp();
@@ -240,13 +293,31 @@ export default function BilanScreen() {
   const [cardIdx, setCardIdx] = useState(0);
   const [sharing, setSharing] = useState(false);
   const shotRef = useRef<ViewShot>(null);
+  const [isPro, setIsPro] = useState<boolean | null>(null);
 
-  if (loading || !data) {
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const userId = session?.user?.id;
+      if (!userId) { setIsPro(false); return; }
+      const { data: credits } = await supabase
+        .from('credits_utilisateur')
+        .select('abonne')
+        .eq('user_id', userId)
+        .maybeSingle();
+      setIsPro(Boolean(credits?.abonne));
+    });
+  }, []);
+
+  if (loading || !data || isPro === null) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0A0808', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={accent} size="large" />
       </View>
     );
+  }
+
+  if (!isPro) {
+    return <ProTeaser accent={accent} />;
   }
 
   const cards = buildCards(data);
