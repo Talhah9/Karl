@@ -367,6 +367,10 @@ function FreelanceDashboard() {
         <Text style={styles.askKarlText}>Demander à Karl…</Text>
       </Pressable>
 
+      <Pressable style={styles.bilanBtn} onPress={() => router.push('/bilan')}>
+        <Text style={styles.bilanBtnTxt}>🎁  Voir mon bilan du mois</Text>
+      </Pressable>
+
       <Pressable style={styles.exportLink} onPress={() => router.push('/export')}>
         <Text style={styles.exportLinkText}>↗ Exporter mes données (CSV / PDF)</Text>
       </Pressable>
@@ -553,6 +557,10 @@ function PersoDashboard() {
       >
         <KarlMascot size={30} color={C.purple} />
         <Text style={styles.askKarlText}>Demander à Karl…</Text>
+      </Pressable>
+
+      <Pressable style={styles.bilanBtn} onPress={() => router.push('/bilan')}>
+        <Text style={styles.bilanBtnTxt}>🎁  Voir mon bilan du mois</Text>
       </Pressable>
 
       <Pressable
@@ -936,6 +944,20 @@ const styles = StyleSheet.create({
     color: C.muted,
     textAlign: 'center',
     marginTop: 2,
+  },
+  bilanBtn: {
+    backgroundColor: C.surf2,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    borderRadius: 26,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bilanBtnTxt: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+    color: C.text,
   },
   exportLink: {
     alignItems: 'center',
