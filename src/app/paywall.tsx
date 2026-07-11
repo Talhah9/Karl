@@ -10,11 +10,11 @@ import { Tag } from '@/components/ui/Tag';
 import { C } from '@/constants/colors';
 
 const FEATURES = [
-  { label: 'Coach Karl', free: '5/sem', pro: '∞' },
+  { label: 'Coach Karl illimité', free: '5/sem', pro: '∞' },
   { label: 'Projections avancées', free: '–', pro: '✓' },
-  { label: 'Alertes perso (URSSAF, budgets, objectifs)', free: '–', pro: '✓' },
-  { label: 'Export comptable', free: '–', pro: '✓' },
-  { label: 'Freelance + perso, une seule app', free: '–', pro: '✓' },
+  { label: 'Bilan mensuel partageable', free: '–', pro: '✓' },
+  { label: 'Export CSV / PDF', free: '–', pro: '✓' },
+  { label: 'Alertes intelligentes (URSSAF, budgets)', free: '–', pro: '✓' },
 ];
 
 export default function PaywallScreen() {
@@ -85,7 +85,6 @@ export default function PaywallScreen() {
           <Pressable
             style={[
               styles.priceCard,
-              styles.priceCardYearly,
               plan === 'yearly' && styles.priceCardActive,
             ]}
             onPress={() => setPlan('yearly')}
@@ -169,15 +168,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 2,
   },
-  priceCardYearly: { position: 'relative', overflow: 'visible' },
   priceCardActive: {
     borderColor: C.lime,
     backgroundColor: 'rgba(196,245,66,0.08)',
   },
   badgeWrap: {
-    position: 'absolute',
-    top: -9,
-    right: 12,
+    alignSelf: 'flex-end',
+    marginBottom: 6,
   },
   priceMono: {
     fontFamily: 'SpaceMono_400Regular',
@@ -185,7 +182,6 @@ const styles = StyleSheet.create({
     color: C.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.9,
-    marginTop: 8,
   },
   priceAmount: {
     fontFamily: 'Sora_800ExtraBold',
