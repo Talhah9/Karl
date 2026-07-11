@@ -28,6 +28,7 @@ type KarlResponse = {
   pending?: PendingAction;
   credits_restants?: number;
   credits_max?: number;
+  abonne?: boolean;
 };
 
 type PendingAction =
@@ -116,6 +117,7 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [creditsRestants, setCreditsRestants] = useState<number | null>(null);
   const [creditsMax, setCreditsMax] = useState(20);
+  const [isPro, setIsPro] = useState(false);
   const [isExceptionnelle, setIsExceptionnelle] = useState(false);
   const listRef = useRef<FlatList>(null);
 
@@ -145,6 +147,7 @@ export default function ChatScreen() {
   function applyCredits(result: KarlResponse) {
     if (result.credits_restants !== undefined) setCreditsRestants(result.credits_restants);
     if (result.credits_max !== undefined) setCreditsMax(result.credits_max);
+    if (result.abonne !== undefined) setIsPro(result.abonne);
   }
 
   async function send() {
@@ -301,9 +304,9 @@ export default function ChatScreen() {
           </View>
         </View>
         {creditsRestants !== null && (
-          <View style={[styles.pill, { borderColor: creditsBadgeColor(creditsRestants, creditsMax, accent) }]}>
-            <Text style={[styles.pillText, { color: creditsBadgeColor(creditsRestants, creditsMax, accent) }]}>
-              {creditsRestants}/{creditsMax}
+          <View style={[styles.pill, { borderColor: isPro ? accent : creditsBadgeColor(creditsRestants, creditsMax, accent) }]}>
+            <Text style={[styles.pillText, { color: isPro ? accent : creditsBadgeColor(creditsRestants, creditsMax, accent) }]}>
+              {isPro ? 'Illimité ✨' : `${creditsRestants}/${creditsMax}`}
             </Text>
           </View>
         )}

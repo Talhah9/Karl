@@ -289,7 +289,10 @@ export default function SettingsScreen() {
           <Row
             label="Mentions légales & CGU"
             onPress={() =>
-              Alert.alert('Mentions légales', 'Contenu à venir avant publication.')
+              Alert.alert(
+                'Mentions légales & CGU',
+                "Karl n'est pas un conseiller financier réglementé. Les estimations fournies sont indicatives et ne constituent pas un conseil financier, fiscal ou juridique.\n\nUsage raisonnable : un usage automatisé ou excessif de l'assistant Karl (envoi massif de messages par des moyens automatisés) peut être temporairement limité pour garantir la qualité du service à l'ensemble des utilisateurs.\n\nContenu complet disponible avant publication."
+              )
             }
             last
           />
