@@ -24,6 +24,7 @@ const TOOLS: Anthropic.Tool[] = [
         categorie: { type: "string", description: "Catégorie (restauration, transport, salaire, loyer, loisirs...)" },
         type: { type: "string", enum: ["depense", "revenu"], description: "Type de transaction" },
         description: { type: "string", description: "Description courte optionnelle" },
+        exceptionnelle: { type: "boolean", description: "Mettre à true si l'utilisateur indique que c'est une dépense ponctuelle, exceptionnelle, non représentative du quotidien (ex: machine à laver, réparation voiture, achat unique). Omis ou false pour une dépense courante." },
       },
       required: ["montant", "categorie", "type"],
     },
@@ -39,6 +40,7 @@ const TOOLS: Anthropic.Tool[] = [
         nouvelle_categorie: { type: "string", description: "Nouvelle catégorie (optionnel)" },
         nouveau_type: { type: "string", enum: ["depense", "revenu"], description: "Nouveau type (optionnel)" },
         nouvelle_description: { type: "string", description: "Nouvelle description (optionnel)" },
+        nouvelle_exceptionnelle: { type: "boolean", description: "Modifier le statut exceptionnel/ponctuel de la transaction (optionnel)" },
       },
       required: ["id"],
     },
@@ -232,8 +234,8 @@ Deno.serve(async (req: Request) => {
       profile?: string;
       persoSetup?: { netSalary: number; payday: number; fixedExpenses: number };
       freelanceSetup?: { status: string; monthlyRevenue: number; versementLiberatoire: boolean; acre: boolean };
-      confirmed_transaction?: { montant: number; categorie: string; type: string; description?: string };
-      confirmed_modification?: { id: string; montant: number; categorie: string; type: string; description?: string };
+      confirmed_transaction?: { montant: number; categorie: string; type: string; description?: string; exceptionnelle?: boolean };
+      confirmed_modification?: { id: string; montant: number; categorie: string; type: string; description?: string; exceptionnelle?: boolean };
       confirmed_deletion?: { id: string };
     };
     const { message, history = [], profile = "freelance", persoSetup, freelanceSetup, confirmed_transaction, confirmed_modification, confirmed_deletion } = body;
@@ -284,7 +286,7 @@ Deno.serve(async (req: Request) => {
 
     // --- Transaction confirmée : insertion ---
     if (confirmed_transaction) {
-      const { montant, categorie, type, description } = confirmed_transaction;
+      const { montant, categorie, type, description, exceptionnelle } = confirmed_transaction;
       await supabase.from("transactions").insert({
         user_id: userId,
         montant,
@@ -292,6 +294,7 @@ Deno.serve(async (req: Request) => {
         type,
         description: description ?? null,
         date: now.toISOString().split("T")[0],
+        exceptionnelle: exceptionnelle ?? false,
       });
 
       if (description) {
@@ -317,10 +320,13 @@ Deno.serve(async (req: Request) => {
 
     // --- Modification confirmée ---
     if (confirmed_modification) {
-      const { id, montant, categorie, type, description } = confirmed_modification;
+      const { id, montant, categorie, type, description, exceptionnelle } = confirmed_modification;
       await supabase
         .from("transactions")
-        .update({ montant, categorie, type, description: description ?? null })
+        .update({
+          montant, categorie, type, description: description ?? null,
+          ...(exceptionnelle !== undefined ? { exceptionnelle } : {}),
+        })
         .eq("id", id)
         .eq("user_id", userId);
 
@@ -440,11 +446,11 @@ Deno.serve(async (req: Request) => {
       }
 
       if (toolName === "modifier_transaction") {
-        const modInput = input as { id: string; nouveau_montant?: number; nouvelle_categorie?: string; nouveau_type?: string; nouvelle_description?: string };
+        const modInput = input as { id: string; nouveau_montant?: number; nouvelle_categorie?: string; nouveau_type?: string; nouvelle_description?: string; nouvelle_exceptionnelle?: boolean };
 
         const { data: existing } = await supabase
           .from("transactions")
-          .select("id, montant, categorie, type, description")
+          .select("id, montant, categorie, type, description, exceptionnelle")
           .eq("id", modInput.id)
           .eq("user_id", userId)
           .maybeSingle();
@@ -477,6 +483,7 @@ Deno.serve(async (req: Request) => {
         if (modInput.nouvelle_categorie !== undefined) changes.categorie = modInput.nouvelle_categorie;
         if (modInput.nouveau_type !== undefined) changes.type = modInput.nouveau_type;
         if (modInput.nouvelle_description !== undefined) changes.description = modInput.nouvelle_description;
+        if (modInput.nouvelle_exceptionnelle !== undefined) changes.exceptionnelle = modInput.nouvelle_exceptionnelle;
 
         const ex = existing as any;
         const confirmText = await getConfirmationText(
@@ -502,7 +509,7 @@ Deno.serve(async (req: Request) => {
           pending: {
             action: "modify",
             id: ex.id,
-            current: { montant: ex.montant, categorie: ex.categorie, type: ex.type, description: ex.description },
+            current: { montant: ex.montant, categorie: ex.categorie, type: ex.type, description: ex.description, exceptionnelle: ex.exceptionnelle },
             changes,
           },
           credits_restants: creditsAfter,

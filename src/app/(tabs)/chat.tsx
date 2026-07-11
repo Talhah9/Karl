@@ -7,6 +7,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -30,13 +31,13 @@ type KarlResponse = {
 };
 
 type PendingAction =
-  | { action: 'add'; montant: number; categorie: string; type: 'depense' | 'revenu'; description?: string }
+  | { action: 'add'; montant: number; categorie: string; type: 'depense' | 'revenu'; description?: string; exceptionnelle?: boolean }
   | { action: 'delete'; id: string; montant: number; categorie: string; type: 'depense' | 'revenu'; description?: string }
   | {
       action: 'modify';
       id: string;
-      current: { montant: number; categorie: string; type: string; description?: string };
-      changes: { montant?: number; categorie?: string; type?: string; description?: string };
+      current: { montant: number; categorie: string; type: string; description?: string; exceptionnelle?: boolean };
+      changes: { montant?: number; categorie?: string; type?: string; description?: string; exceptionnelle?: boolean };
     };
 
 const SUGGESTIONS_FREELANCE = ['Je peux me payer combien ?', 'Mes dernières dépenses', 'J\'ai encaissé 500€'];
@@ -115,6 +116,7 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [creditsRestants, setCreditsRestants] = useState<number | null>(null);
   const [creditsMax, setCreditsMax] = useState(20);
+  const [isExceptionnelle, setIsExceptionnelle] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   function buildHistory(): { role: 'user' | 'assistant'; content: string }[] {
@@ -179,10 +181,13 @@ export default function ChatScreen() {
         setPendingAction(pending);
         if (pending?.action === 'add') {
           setEditedMontant(String(pending.montant).replace('.', ','));
+          setIsExceptionnelle(pending.exceptionnelle ?? false);
         } else if (pending?.action === 'modify' && pending.changes.montant !== undefined) {
           setEditedMontant(String(pending.changes.montant).replace('.', ','));
+          setIsExceptionnelle(false);
         } else {
           setEditedMontant('');
+          setIsExceptionnelle(false);
         }
       } else {
         addMessage('karl', result.message);
@@ -200,8 +205,10 @@ export default function ChatScreen() {
     // Capture before clearing — card must vanish the instant the user taps Confirm
     const action = pendingAction;
     const montantStr = editedMontant;
+    const exceptionnelleSnap = isExceptionnelle;
     setPendingAction(null);
     setEditedMontant('');
+    setIsExceptionnelle(false);
     setError(null);
     setIsLoading(true);
 
@@ -213,7 +220,7 @@ export default function ChatScreen() {
           message: 'confirmé',
           history: buildHistory(),
           profile,
-          confirmed_transaction: { ...action, montant: parsedMontant },
+          confirmed_transaction: { ...action, montant: parsedMontant, exceptionnelle: exceptionnelleSnap },
         });
         applyCredits(result);
         addMessage('user', '✅ Confirmé');
@@ -237,6 +244,7 @@ export default function ChatScreen() {
             categorie: action.changes.categorie ?? action.current.categorie,
             type: action.changes.type ?? action.current.type,
             description: action.changes.description ?? action.current.description,
+            exceptionnelle: action.changes.exceptionnelle ?? action.current.exceptionnelle,
           },
         });
         applyCredits(result);
@@ -264,6 +272,7 @@ export default function ChatScreen() {
   function cancelAction() {
     setPendingAction(null);
     setEditedMontant('');
+    setIsExceptionnelle(false);
     addMessage('karl', "Pas de souci, on n'enregistre rien. 👍");
   }
 
@@ -330,20 +339,35 @@ export default function ChatScreen() {
         <View style={styles.inputArea}>
           {pendingAction ? (
             <View style={styles.confirmBlock}>
-              {/* ADD: editable amount */}
+              {/* ADD: editable amount + exceptional toggle */}
               {pendingAction.action === 'add' && (
-                <View style={styles.confirmAmountRow}>
-                  <TextInput
-                    style={styles.confirmAmountInput}
-                    value={editedMontant}
-                    onChangeText={setEditedMontant}
-                    keyboardType="decimal-pad"
-                    selectTextOnFocus
-                  />
-                  <Text style={styles.confirmMeta}>
-                    {'€ · '}{pendingAction.categorie}{' · '}{pendingAction.type}
-                  </Text>
-                </View>
+                <>
+                  <View style={styles.confirmAmountRow}>
+                    <TextInput
+                      style={styles.confirmAmountInput}
+                      value={editedMontant}
+                      onChangeText={setEditedMontant}
+                      keyboardType="decimal-pad"
+                      selectTextOnFocus
+                    />
+                    <Text style={styles.confirmMeta}>
+                      {'€ · '}{pendingAction.categorie}{' · '}{pendingAction.type}
+                    </Text>
+                  </View>
+                  {pendingAction.type === 'depense' && (
+                    <View style={styles.confirmExceptRow}>
+                      <Text style={[styles.confirmMeta, { flex: 1, textAlign: 'left' }]}>
+                        ⚡ Dépense exceptionnelle
+                      </Text>
+                      <Switch
+                        value={isExceptionnelle}
+                        onValueChange={setIsExceptionnelle}
+                        trackColor={{ true: C.warm, false: C.surf3 }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+                  )}
+                </>
               )}
 
               {/* MODIFY: show current → new */}
@@ -562,6 +586,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
+  },
+  confirmExceptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: 2,
   },
   confirmAmountInput: {
     fontFamily: 'SpaceMono_400Regular',

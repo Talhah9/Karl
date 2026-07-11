@@ -101,6 +101,8 @@ function PersoProjection() {
     weeks,
     weeklyBudget,
     daysElapsed,
+    exceptionnellesTotal,
+    exceptionnellesCount,
   } = data;
 
   const hasData = totalDepenses > 0;
@@ -221,6 +223,14 @@ function PersoProjection() {
         </View>
       )}
 
+      {exceptionnellesCount > 0 && (
+        <View style={styles.exceptNote}>
+          <Text style={styles.exceptNoteText}>
+            ⚡ {exceptionnellesCount === 1 ? '1 dépense exceptionnelle' : `${exceptionnellesCount} dépenses exceptionnelles`} ({Math.round(exceptionnellesTotal).toLocaleString('fr-FR')} €) exclue{exceptionnellesCount > 1 ? 's' : ''} du calcul de rythme
+          </Text>
+        </View>
+      )}
+
       <Text style={styles.legal}>Projection linéaire sur {daysElapsed} jour{daysElapsed > 1 ? 's' : ''} · pas une boule de cristal 🔮</Text>
     </ScrollView>
   );
@@ -321,6 +331,20 @@ const styles = StyleSheet.create({
   },
   fieldAmountUnit: { fontFamily: 'Sora_400Regular', fontSize: 11, color: C.muted },
 
+  exceptNote: {
+    backgroundColor: 'rgba(255,122,77,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,122,77,0.22)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  exceptNoteText: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 12,
+    color: C.warm,
+    lineHeight: 17,
+  },
   legal: {
     fontFamily: 'SpaceMono_400Regular',
     fontSize: 9,

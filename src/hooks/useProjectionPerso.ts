@@ -25,6 +25,8 @@ export interface ProjectionPerso {
   weeks: WeekData[];
   daysElapsed: number;
   daysInMonth: number;      // daysInCycle (kept for compat)
+  exceptionnellesTotal: number;
+  exceptionnellesCount: number;
 }
 
 export function useProjectionPerso() {
@@ -45,7 +47,7 @@ export function useProjectionPerso() {
     const [txsResult, chargesResult, goalResult] = await Promise.all([
       supabase
         .from('transactions')
-        .select('montant, date')
+        .select('montant, date, exceptionnelle')
         .eq('type', 'depense')
         .gte('date', cycleStart)
         .lte('date', cycleEnd),
@@ -58,7 +60,7 @@ export function useProjectionPerso() {
         .maybeSingle(),
     ]);
 
-    const txs = (txsResult.data ?? []) as { montant: string | number; date: string }[];
+    const txs = (txsResult.data ?? []) as { montant: string | number; date: string; exceptionnelle: boolean }[];
     const chargesTotal = (chargesResult.data ?? []).reduce(
       (s: number, c: any) => s + Number(c.montant),
       0
@@ -70,8 +72,14 @@ export function useProjectionPerso() {
     const budgetEnvelope = salary - chargesTotal - savingsGoal;
     const totalDepenses = txs.reduce((s, t) => s + Number(t.montant), 0);
 
-    const dailyRate = daysElapsed > 0 ? totalDepenses / daysElapsed : 0;
-    const projectedMonthSpending = dailyRate * daysInCycle;
+    const txsExceptionnelles = txs.filter((t) => t.exceptionnelle);
+    const exceptionnellesTotal = txsExceptionnelles.reduce((s, t) => s + Number(t.montant), 0);
+    const exceptionnellesCount = txsExceptionnelles.length;
+    const totalHabituel = totalDepenses - exceptionnellesTotal;
+
+    // Le rythme quotidien exclut les dépenses exceptionnelles pour ne pas fausser l'extrapolation
+    const dailyRate = daysElapsed > 0 ? totalHabituel / daysElapsed : 0;
+    const projectedMonthSpending = exceptionnellesTotal + dailyRate * daysInCycle;
     const projectedRemaining = budgetEnvelope - projectedMonthSpending;
     const weeklyBudget = budgetEnvelope / (daysInCycle / 7);
 
@@ -128,6 +136,8 @@ export function useProjectionPerso() {
       weeks,
       daysElapsed,
       daysInMonth: daysInCycle,
+      exceptionnellesTotal,
+      exceptionnellesCount,
     });
     setLoading(false);
   }, [authReady, persoSetup]);

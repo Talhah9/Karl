@@ -45,6 +45,7 @@ export default function AddScreen() {
   const [field1, setField1] = useState('');
   const [category, setCategory] = useState(defaultCat(isFreelance, initialType));
   const [toggle, setToggle] = useState(false);
+  const [isExceptionnelle, setIsExceptionnelle] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const parsed = parseFloat(amount.replace(',', '.')) || 0;
@@ -69,6 +70,7 @@ export default function AddScreen() {
   function handleTypeChange(t: EntryType) {
     setType(t);
     setCategory(defaultCat(isFreelance, t));
+    if (t === 'income') setIsExceptionnelle(false);
   }
 
   async function handleSave() {
@@ -86,6 +88,7 @@ export default function AddScreen() {
         type: type === 'income' ? 'revenu' : 'depense',
         description: field1.trim() || null,
         date: todayStr,
+        exceptionnelle: type === 'expense' ? isExceptionnelle : false,
       });
 
       setHasData(true);
@@ -191,6 +194,21 @@ export default function AddScreen() {
               thumbColor="#fff"
             />
           </View>
+
+          {type === 'expense' && (
+            <View style={styles.field}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={styles.fieldVal}>Dépense exceptionnelle</Text>
+                <Text style={styles.fieldLab}>Achat ponctuel, non représentatif du quotidien</Text>
+              </View>
+              <Switch
+                value={isExceptionnelle}
+                onValueChange={setIsExceptionnelle}
+                trackColor={{ true: C.warm, false: C.surf3 }}
+                thumbColor="#fff"
+              />
+            </View>
+          )}
         </View>
 
         {/* Category chips */}
