@@ -145,7 +145,7 @@ export default function SettingsScreen() {
   function handleLogout() {
     Alert.alert(
       'Se déconnecter',
-      'Ta session sera fermée. Tes données restent sauvegardées si tu uses le même compte.',
+      'Tes données restent sauvegardées et seront restaurées à la reconnexion.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -153,8 +153,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             await supabase.auth.signOut();
-            reset();
-            router.replace('/onboarding/profile');
+            router.replace('/auth/sign-in');
           },
         },
       ]
@@ -193,7 +192,16 @@ export default function SettingsScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {/* ── COMPTE ── */}
-        {isAnonymous ? (
+        {isAnonymous === null ? (
+          <Section title="Compte">
+            <Row label="Non connecté" last={false} />
+            <Row
+              label="Se connecter"
+              onPress={() => router.push('/auth/sign-in')}
+              last
+            />
+          </Section>
+        ) : isAnonymous === true ? (
           <Section title="Compte">
             <Row
               label="Compte non sauvegardé"

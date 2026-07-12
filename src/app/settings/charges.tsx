@@ -21,9 +21,11 @@ export default function EditChargesScreen() {
   const [nom, setNom] = useState('');
   const [montantText, setMontantText] = useState('');
   const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState('');
 
   const total = charges.reduce((s, c) => s + c.montant, 0);
-  const canAdd = nom.trim().length > 0 && montantText.length > 0;
+  const parsedMontant = parseFloat(montantText.replace(',', '.'));
+  const canAdd = nom.trim().length > 0 && !isNaN(parsedMontant) && parsedMontant > 0;
 
   useEffect(() => {
     if (!authReady) return;
@@ -47,21 +49,32 @@ export default function EditChargesScreen() {
     const montant = parseFloat(montantText.replace(',', '.'));
     if (!trimmed || isNaN(montant) || montant <= 0) return;
 
+    setAddError('');
     setAdding(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    if (!userId) { setAdding(false); return; }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) {
+        setAddError('Session expirée — reconnecte-toi.');
+        setAdding(false);
+        return;
+      }
 
-    const { data, error } = await supabase
-      .from('charges_fixes')
-      .insert({ user_id: userId, nom: trimmed, montant })
-      .select('id')
-      .single();
+      const { data, error } = await supabase
+        .from('charges_fixes')
+        .insert({ user_id: userId, nom: trimmed, montant })
+        .select('id')
+        .single();
 
-    if (!error && data) {
-      setCharges((prev) => [...prev, { id: data.id as string, nom: trimmed, montant }]);
-      setNom('');
-      setMontantText('');
+      if (error) {
+        setAddError("Erreur lors de l'ajout. Réessaie.");
+      } else if (data) {
+        setCharges((prev) => [...prev, { id: data.id as string, nom: trimmed, montant }]);
+        setNom('');
+        setMontantText('');
+      }
+    } catch {
+      setAddError('Erreur inattendue. Réessaie.');
     }
     setAdding(false);
   }
@@ -118,6 +131,7 @@ export default function EditChargesScreen() {
                 <Text style={styles.euro}>€</Text>
               </View>
             </View>
+            {addError ? <Text style={styles.errorText}>{addError}</Text> : null}
             <Pressable
               style={[styles.addBtn, !canAdd && styles.addBtnDisabled]}
               onPress={handleAdd}
@@ -221,6 +235,7 @@ const styles = StyleSheet.create({
   addBtnDisabled: { backgroundColor: C.surf3 },
   addBtnText: { fontFamily: 'Sora_700Bold', fontSize: 14, color: C.dark },
   addBtnTextDisabled: { color: C.muted },
+  errorText: { fontFamily: 'Sora_400Regular', fontSize: 12.5, color: C.warm, textAlign: 'center' },
   listBlock: {
     backgroundColor: C.surf,
     borderWidth: 1,

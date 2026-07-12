@@ -1,8 +1,17 @@
-import * as Linking from 'expo-linking';
+import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from './supabase';
 
 export type OAuthProvider = 'google' | 'apple';
+
+// In Expo Go, makeRedirectUri returns exp://127.0.0.1:PORT/--/auth/callback (registered in Expo Go).
+// In a dev/production build, returns bilanapp://auth/callback.
+// Either way this avoids the "Manual linking is disabled" error from using Linking.createURL directly.
+function makeRedirect(): string {
+  const redirectTo = AuthSession.makeRedirectUri({ scheme: 'bilanapp', path: 'auth/callback' });
+  console.log('[OAuth] redirect URI:', redirectTo);
+  return redirectTo;
+}
 
 async function parseAndApplySession(url: string): Promise<string | null> {
   // PKCE code
@@ -26,7 +35,7 @@ async function parseAndApplySession(url: string): Promise<string | null> {
 
 // Use linkIdentity when the user is anonymous (preserves user_id)
 export async function linkOAuth(provider: OAuthProvider): Promise<string | null> {
-  const redirectTo = Linking.createURL('auth/callback');
+  const redirectTo = makeRedirect();
   const { data, error } = await supabase.auth.linkIdentity({
     provider,
     options: { redirectTo, skipBrowserRedirect: true },
@@ -42,7 +51,7 @@ export async function linkOAuth(provider: OAuthProvider): Promise<string | null>
 
 // Use signInWithOAuth for returning users (new session, restores existing account)
 export async function signInOAuth(provider: OAuthProvider): Promise<string | null> {
-  const redirectTo = Linking.createURL('auth/callback');
+  const redirectTo = makeRedirect();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: { redirectTo, skipBrowserRedirect: true },

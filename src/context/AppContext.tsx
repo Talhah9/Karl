@@ -110,6 +110,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setAuthReady(true);
       } else {
         setIsAnonymous(null);
+        setAuthReady(false);
       }
     });
 
