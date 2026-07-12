@@ -785,11 +785,11 @@ async function executeTool(
         };
       } else {
         const salaire = ctx.persoSetup?.netSalary ?? 0;
-        const solde = salaire - chargesTotal - savingsGoal - totalDepense;
-        console.log("[Karl solde debug]", { payday, cycleStart, salaire, chargesTotal, savingsGoal, totalDepense, solde });
+        const solde = salaire + totalRevenu - chargesTotal - savingsGoal - totalDepense;
+        console.log("[Karl solde debug]", { payday, cycleStart, salaire, totalRevenu, chargesTotal, savingsGoal, totalDepense, solde });
         return {
           solde_disponible: solde,
-          detail: `Cycle depuis le ${cycleStart} | Salaire: ${salaire}€ | Charges fixes: ${chargesTotal}€ | Épargne réservée: ${savingsGoal}€ | Dépenses variables: ${totalDepense}€ | Reste: ${solde}€`,
+          detail: `Cycle depuis le ${cycleStart} | Salaire fixe: ${salaire}€ | Revenus additionnels: ${totalRevenu}€ | Charges fixes: ${chargesTotal}€ | Épargne réservée: ${savingsGoal}€ | Dépenses variables: ${totalDepense}€ | Reste: ${solde}€`,
         };
       }
     }

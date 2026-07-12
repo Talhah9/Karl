@@ -579,10 +579,10 @@ function PersoDashboard() {
 
   const salary = persoSetup.netSalary;
   const savingsGoal = goal?.montant_cible ?? 0;
-  // Same formula as Karl: salary − fixed charges − savings goal − variable spending
-  const available = salary - chargesTotal - savingsGoal - totalDepenses;
+  // Base salary + any manually-added revenue transactions − fixed charges − savings goal − variable spending
+  const available = salary + totalRevenus - chargesTotal - savingsGoal - totalDepenses;
 
-  const budgetEnvelope = salary - chargesTotal - savingsGoal; // total variable budget (without spending)
+  const budgetEnvelope = salary + totalRevenus - chargesTotal - savingsGoal; // total variable budget (without spending)
   const budgetPct =
     budgetEnvelope > 0 && catData.length > 0
       ? Math.round((totalDepenses / budgetEnvelope) * 100)
