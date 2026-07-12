@@ -752,15 +752,34 @@ function PersoDashboard() {
 
       <ComparaisonRow data={cmpData} loading={cmpLoading} />
 
-      {/* Alert — computed from real spending */}
-      {catData.length > 0 && available > 0 && (
-        <View style={styles.alert}>
-          <Text style={styles.alertEmoji}>{budgetPct >= 80 ? '⚠️' : '📊'}</Text>
+      {/* Smart suggestions — deficit / overspend / positive margin */}
+      {available < 0 && (
+        <View style={[styles.alert, styles.alertDeficit]}>
+          <Text style={styles.alertEmoji}>🔴</Text>
           <Text style={styles.alertText}>
-            <Text style={styles.warm}>{budgetPct} %</Text> du budget variable dépensé ce mois
-            {budgetPct >= 80 ? ' — on lève le pied ?' : '.'}
+            Solde <Text style={styles.warm}>{Math.abs(available).toLocaleString('fr-FR')} € dans le rouge</Text> — dépenses trop élevées ou revenus manquants ce mois.
           </Text>
         </View>
+      )}
+      {available >= 0 && catData.length > 0 && budgetPct >= 80 && (
+        <View style={styles.alert}>
+          <Text style={styles.alertEmoji}>⚠️</Text>
+          <Text style={styles.alertText}>
+            <Text style={styles.warm}>{budgetPct} %</Text> du budget variable dépensé — on lève le pied ?
+          </Text>
+        </View>
+      )}
+      {available >= 0 && totalDepenses > 0 && budgetEnvelope > 0 && available >= budgetEnvelope * 0.35 && (
+        <Pressable
+          style={[styles.alert, styles.alertPositive]}
+          onPress={() => router.push('/settings/savings-goal')}
+        >
+          <Text style={styles.alertEmoji}>💚</Text>
+          <Text style={styles.alertText}>
+            Belle marge ce mois —{' '}
+            <Text style={styles.limeText}>augmenter ton objectif d'épargne ?</Text>
+          </Text>
+        </Pressable>
       )}
 
       {/* Revenus du mois */}
@@ -1223,6 +1242,14 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingHorizontal: 14,
     alignItems: 'center',
+  },
+  alertDeficit: {
+    backgroundColor: 'rgba(239,68,68,0.10)',
+    borderColor: 'rgba(239,68,68,0.3)',
+  },
+  alertPositive: {
+    backgroundColor: 'rgba(196,245,66,0.08)',
+    borderColor: 'rgba(196,245,66,0.28)',
   },
   alertEmoji: { fontSize: 18 },
   alertText: {
