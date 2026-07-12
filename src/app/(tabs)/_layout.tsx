@@ -88,7 +88,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="projection"
         options={{
-          title: 'Projec.',
+          title: 'Analyse',
           tabBarIcon: ({ focused }) => <BarsIcon focused={focused} />,
         }}
       />
