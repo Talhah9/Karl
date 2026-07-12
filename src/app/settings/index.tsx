@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -61,6 +62,38 @@ function Row({
   return inner;
 }
 
+// ─── Toggle row ───────────────────────────────────────────────────────────────
+function ToggleRow({
+  label,
+  sub,
+  value,
+  onChange,
+  accent,
+  last,
+}: {
+  label: string;
+  sub?: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  accent: string;
+  last?: boolean;
+}) {
+  return (
+    <View style={[styles.row, !last && styles.rowBorder]}>
+      <View style={{ flex: 1, paddingRight: 12 }}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {sub ? <Text style={styles.rowSub}>{sub}</Text> : null}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ true: accent, false: C.surf3 }}
+        thumbColor="#fff"
+      />
+    </View>
+  );
+}
+
 // ─── Delete confirmation modal ─────────────────────────────────────────────────
 function DeleteAccountModal({
   visible,
@@ -76,35 +109,35 @@ function DeleteAccountModal({
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={styles.deleteOverlay}>
-      <View style={styles.deleteCard}>
-        <Text style={styles.deleteTitle}>Supprimer mon compte</Text>
-        <Text style={styles.deleteSub}>
-          Cette action est irréversible. Toutes tes transactions, charges et objectifs seront définitivement supprimés.
-        </Text>
-        <Text style={styles.deleteHint}>
-          Tape <Text style={{ fontFamily: 'Sora_700Bold', color: C.warm }}>SUPPRIMER</Text> pour confirmer.
-        </Text>
-        <TextInput
-          style={styles.deleteInput}
-          value={text}
-          onChangeText={setText}
-          placeholder="SUPPRIMER"
-          placeholderTextColor={C.muted}
-          autoCapitalize="characters"
-        />
-        <View style={styles.deleteBtns}>
-          <Pressable style={styles.deleteCancelBtn} onPress={() => { setText(''); onCancel(); }}>
-            <Text style={styles.deleteCancelText}>Annuler</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.deleteConfirmBtn, text !== 'SUPPRIMER' && { opacity: 0.4 }]}
-            onPress={() => { if (text === 'SUPPRIMER') { setText(''); onConfirm(); } }}
-            disabled={text !== 'SUPPRIMER'}
-          >
-            <Text style={styles.deleteConfirmText}>Supprimer</Text>
-          </Pressable>
+        <View style={styles.deleteCard}>
+          <Text style={styles.deleteTitle}>Supprimer mon compte</Text>
+          <Text style={styles.deleteSub}>
+            Cette action est irréversible. Toutes tes transactions, charges et objectifs seront définitivement supprimés.
+          </Text>
+          <Text style={styles.deleteHint}>
+            Tape <Text style={{ fontFamily: 'Sora_700Bold', color: C.warm }}>SUPPRIMER</Text> pour confirmer.
+          </Text>
+          <TextInput
+            style={styles.deleteInput}
+            value={text}
+            onChangeText={setText}
+            placeholder="SUPPRIMER"
+            placeholderTextColor={C.muted}
+            autoCapitalize="characters"
+          />
+          <View style={styles.deleteBtns}>
+            <Pressable style={styles.deleteCancelBtn} onPress={() => { setText(''); onCancel(); }}>
+              <Text style={styles.deleteCancelText}>Annuler</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.deleteConfirmBtn, text !== 'SUPPRIMER' && { opacity: 0.4 }]}
+              onPress={() => { if (text === 'SUPPRIMER') { setText(''); onConfirm(); } }}
+              disabled={text !== 'SUPPRIMER'}
+            >
+              <Text style={styles.deleteConfirmText}>Supprimer</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
       </View>
     </Modal>
   );
@@ -121,6 +154,10 @@ export default function SettingsScreen() {
   const [credits, setCredits] = useState<{ restants: number; max: number } | null>(null);
   const [isPro, setIsPro] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Sécurité toggles (UI only — feature implementation pending)
+  const [faceIdEnabled, setFaceIdEnabled] = useState(false);
+  const [hideBalances, setHideBalances] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -140,7 +177,7 @@ export default function SettingsScreen() {
         setIsPro(Boolean(data.abonne));
       }
     });
-  }, [isAnonymous]); // refresh when anonymous state changes (e.g. after account creation)
+  }, [isAnonymous]);
 
   function handleLogout() {
     Alert.alert(
@@ -191,7 +228,107 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {/* ── COMPTE ── */}
+
+        {/* ── 1. MES FINANCES ── */}
+        <Section title="Mes finances">
+          <Row
+            label="Profil"
+            value={profile === 'perso' ? 'Salarié / Particulier' : 'Entrepreneur / Freelance'}
+            onPress={() => router.push('/onboarding/profile')}
+            last={profile !== 'perso'}
+          />
+          {profile === 'perso' && (
+            <>
+              <Row
+                label="Salaire net mensuel"
+                value={`${persoSetup.netSalary.toLocaleString('fr-FR')} €`}
+                onPress={() => router.push('/settings/salary')}
+                last={false}
+              />
+              <Row
+                label="Date de versement"
+                value={`Le ${persoSetup.payday}`}
+                onPress={() => router.push('/settings/payday')}
+                last={false}
+              />
+              <Row
+                label="Charges fixes"
+                value={`${charges.length} charge${charges.length !== 1 ? 's' : ''} · ${chargesTotal.toLocaleString('fr-FR')} €`}
+                onPress={() => router.push('/settings/charges')}
+                last={false}
+              />
+              <Row
+                label="Objectif d'épargne"
+                value={goal ? `${goal.montant_cible.toLocaleString('fr-FR')} €/mois` : 'Non défini'}
+                onPress={() => router.push('/settings/savings-goal')}
+                last
+              />
+            </>
+          )}
+        </Section>
+
+        {/* ── 2. SÉCURITÉ ── */}
+        <Section title="Sécurité">
+          <ToggleRow
+            label="Face ID"
+            sub="Déverrouiller Karl avec Face ID"
+            value={faceIdEnabled}
+            onChange={setFaceIdEnabled}
+            accent={accent}
+            last={false}
+          />
+          <ToggleRow
+            label="Masquer les soldes"
+            sub="Cacher les montants dans l'app"
+            value={hideBalances}
+            onChange={setHideBalances}
+            accent={accent}
+            last
+          />
+        </Section>
+
+        {/* ── 3. ABONNEMENT ── */}
+        <Section title="Abonnement">
+          <Row
+            label={isPro ? 'Karl Pro actif ✨' : 'Plan Gratuit'}
+            value={credits ? `${credits.restants}/${credits.max} crédits` : undefined}
+            last={!isPro}
+          />
+          {credits && (
+            <View style={styles.creditsBar}>
+              <View
+                style={[
+                  styles.creditsBarFill,
+                  { width: `${Math.round(creditsPct * 100)}%` as any, backgroundColor: creditColor },
+                ]}
+              />
+            </View>
+          )}
+          {!isPro && (
+            <Row
+              label="Découvrir Karl Pro"
+              value="6,99 €/mois"
+              onPress={() => router.push('/paywall')}
+              last
+            />
+          )}
+        </Section>
+
+        {/* ── 4. MES DONNÉES ── */}
+        <Section title="Mes données">
+          <Row
+            label="Mon bilan du mois"
+            onPress={() => router.push('/bilan')}
+            last={false}
+          />
+          <Row
+            label="Exporter mes données"
+            onPress={() => router.push('/export')}
+            last
+          />
+        </Section>
+
+        {/* ── 5. COMPTE ── */}
         {isAnonymous === null ? (
           <Section title="Compte">
             <Row label="Non connecté" last={false} />
@@ -203,11 +340,7 @@ export default function SettingsScreen() {
           </Section>
         ) : isAnonymous === true ? (
           <Section title="Compte">
-            <Row
-              label="Compte non sauvegardé"
-              value="Anonyme"
-              last={false}
-            />
+            <Row label="Compte non sauvegardé" value="Anonyme" last={false} />
             <Row
               label="Créer un compte pour sauvegarder"
               onPress={() => router.push('/auth/save')}
@@ -236,95 +369,23 @@ export default function SettingsScreen() {
           </Section>
         )}
 
-        {/* ── ABONNEMENT ── */}
-        <Section title="Abonnement">
-          <Row
-            label={isPro ? 'Karl Pro actif ✨' : 'Plan Gratuit'}
-            value={
-              credits
-                ? `${credits.restants}/${credits.max} crédits`
-                : undefined
-            }
-            last={!isPro}
-          />
-          {credits && (
-            <View style={styles.creditsBar}>
-              <View
-                style={[
-                  styles.creditsBarFill,
-                  { width: `${Math.round(creditsPct * 100)}%` as any, backgroundColor: creditColor },
-                ]}
-              />
-            </View>
-          )}
-          {!isPro && (
-            <Row
-              label="Découvrir Karl Pro"
-              value="6,99 €/mois"
-              onPress={() => router.push('/paywall')}
-              last
-            />
-          )}
-        </Section>
-
-        {/* ── PARAMÈTRES FINANCIERS ── */}
-        {profile === 'perso' && (
-          <Section title="Paramètres financiers">
-            <Row
-              label="Salaire net mensuel"
-              value={`${persoSetup.netSalary.toLocaleString('fr-FR')} €`}
-              onPress={() => router.push('/settings/salary')}
-              last={false}
-            />
-            <Row
-              label="Date de versement"
-              value={`Le ${persoSetup.payday}`}
-              onPress={() => router.push('/settings/payday')}
-              last={false}
-            />
-            <Row
-              label="Charges fixes"
-              value={`${charges.length} charge${charges.length !== 1 ? 's' : ''} · ${chargesTotal.toLocaleString('fr-FR')} €`}
-              onPress={() => router.push('/settings/charges')}
-              last={false}
-            />
-            <Row
-              label="Objectif d'épargne"
-              value={goal ? `${goal.montant_cible.toLocaleString('fr-FR')} €/mois` : 'Non défini'}
-              onPress={() => router.push('/settings/savings-goal')}
-              last
-            />
-          </Section>
-        )}
-
-        {/* ── DONNÉES ── */}
-        <Section title="Données">
-          <Row
-            label="Mon bilan du mois"
-            onPress={() => router.push('/bilan')}
-            last={false}
-          />
-          <Row
-            label="Exporter mes données"
-            onPress={() => router.push('/export')}
-            last
-          />
-        </Section>
-
-        {/* ── À PROPOS ── */}
-        <Section title="À propos">
-          <Row label="Version" value={APP_VERSION} last={false} />
+        {/* ── 6. ASSISTANCE ── */}
+        <Section title="Assistance">
           <Row
             label="Mentions légales & CGU"
             onPress={() =>
               Alert.alert(
                 'Mentions légales & CGU',
-                "Karl n'est pas un conseiller financier réglementé. Les estimations fournies sont indicatives et ne constituent pas un conseil financier, fiscal ou juridique.\n\nUsage raisonnable : un usage automatisé ou excessif de l'assistant Karl (envoi massif de messages par des moyens automatisés) peut être temporairement limité pour garantir la qualité du service à l'ensemble des utilisateurs.\n\nContenu complet disponible avant publication."
+                "Karl n'est pas un conseiller financier réglementé. Les estimations fournies sont indicatives et ne constituent pas un conseil financier, fiscal ou juridique.\n\nUsage raisonnable : un usage automatisé ou excessif de l'assistant Karl peut être temporairement limité pour garantir la qualité du service.\n\nContenu complet disponible avant publication."
               )
             }
             last
           />
         </Section>
+
+        {/* ── 7. FOOTER VERSION ── */}
+        <Text style={styles.versionFooter}>Karl · v{APP_VERSION}</Text>
+
       </ScrollView>
 
       <DeleteAccountModal
@@ -332,7 +393,6 @@ export default function SettingsScreen() {
         onConfirm={handleDeleteAccount}
         onCancel={() => setShowDeleteModal(false)}
       />
-
     </SafeAreaView>
   );
 }
@@ -380,6 +440,7 @@ const styles = StyleSheet.create({
   rowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
   rowLabel: { fontFamily: 'Sora_400Regular', fontSize: 14, color: C.text, flex: 1 },
   rowLabelDanger: { color: C.warm },
+  rowSub: { fontFamily: 'Sora_400Regular', fontSize: 11, color: C.muted, marginTop: 2 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   rowValue: { fontFamily: 'Sora_400Regular', fontSize: 12, color: C.muted },
   rowChevron: { fontFamily: 'Sora_400Regular', fontSize: 20, color: C.muted },
@@ -394,7 +455,16 @@ const styles = StyleSheet.create({
   },
   creditsBarFill: { height: '100%', borderRadius: 2 },
 
-  // Delete modal overlay
+  versionFooter: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 9,
+    color: C.muted,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    paddingBottom: 8,
+  },
+
+  // Delete modal
   deleteOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(8,6,4,0.75)',
