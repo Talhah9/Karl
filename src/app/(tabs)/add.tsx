@@ -15,6 +15,7 @@ import {
 } from '@/constants/categories';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
+import { useCustomCategories } from '@/hooks/useCustomCategories';
 
 type EntryType = 'income' | 'expense';
 
@@ -35,9 +36,10 @@ function defaultCat(isFreelance: boolean, type: EntryType): string {
 }
 
 export default function AddScreen() {
-  const { profile, freelanceSetup, setHasData } = useApp();
+  const { profile, freelanceSetup, setHasData, authReady } = useApp();
   const accent = profile === 'perso' ? C.purple : C.lime;
   const isFreelance = profile === 'freelance';
+  const { categories: customCats } = useCustomCategories(authReady);
 
   const initialType: EntryType = isFreelance ? 'income' : 'expense';
   const [type, setType] = useState<EntryType>(initialType);
@@ -64,7 +66,11 @@ export default function AddScreen() {
   });
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const catList = getCatList(isFreelance, type);
+  const baseCatList = getCatList(isFreelance, type);
+  const customCatItems: Categorie[] = !isFreelance && type === 'expense'
+    ? customCats.map((c) => ({ value: c.nom, label: c.nom, emoji: c.emoji }))
+    : [];
+  const catList = [...baseCatList, ...customCatItems];
   const currentCat = catList.find((c) => c.value === category);
 
   function handleTypeChange(t: EntryType) {

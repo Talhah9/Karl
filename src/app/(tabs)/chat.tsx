@@ -19,6 +19,7 @@ import { KarlMascot } from '@/components/ui/KarlMascot';
 import { C } from '@/constants/colors';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
+import { useCustomCategories } from '@/hooks/useCustomCategories';
 
 type MessageFrom = 'karl' | 'user';
 type Message = { id: string; from: MessageFrom; text: string };
@@ -107,6 +108,7 @@ const WELCOME_POINTS = [
 export default function ChatScreen() {
   const { profile, authReady, persoSetup, freelanceSetup, hasSeenChatWelcome, setHasSeenChatWelcome } = useApp();
   const accent = profile === 'perso' ? C.purple : C.lime;
+  const { categories: customCategories } = useCustomCategories(authReady);
   const suggestions = profile === 'perso' ? SUGGESTIONS_PERSO : SUGGESTIONS_FREELANCE;
 
   const [text, setText] = useState('');
@@ -178,6 +180,7 @@ export default function ChatScreen() {
         profile,
         persoSetup: profile === 'perso' ? persoSetup : undefined,
         freelanceSetup: profile === 'freelance' ? freelanceSetup : undefined,
+        customCategories: customCategories.length > 0 ? customCategories : undefined,
       });
 
       applyCredits(result);

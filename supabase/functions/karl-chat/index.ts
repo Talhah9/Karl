@@ -116,7 +116,8 @@ ${COMMON_RULES}`;
 
 function buildSystemBlocks(
   systemPrompt: string,
-  learnedHints?: string
+  learnedHints?: string,
+  customCategories?: Array<{ nom: string; emoji: string; budget_mensuel: number }>
 ): Anthropic.TextBlockParam[] {
   const blocks: Anthropic.TextBlockParam[] = [
     { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
@@ -125,6 +126,15 @@ function buildSystemBlocks(
     blocks.push({
       type: "text",
       text: `\n\nCatégories mémorisées pour cet utilisateur (utilise-les automatiquement, sans demander) : ${learnedHints}.`,
+    });
+  }
+  if (customCategories && customCategories.length > 0) {
+    const catList = customCategories
+      .map((c) => `"${c.nom}" (${c.emoji}, budget: ${c.budget_mensuel}€/mois)`)
+      .join(", ");
+    blocks.push({
+      type: "text",
+      text: `\n\nCatégories budgétaires personnalisées de l'utilisateur : ${catList}. Utilise ces noms exacts (tels quels, sans modification) quand tu catégorises une transaction qui leur correspond.`,
     });
   }
   return blocks;
@@ -237,8 +247,9 @@ Deno.serve(async (req: Request) => {
       confirmed_transaction?: { montant: number; categorie: string; type: string; description?: string; exceptionnelle?: boolean };
       confirmed_modification?: { id: string; montant: number; categorie: string; type: string; description?: string; exceptionnelle?: boolean };
       confirmed_deletion?: { id: string };
+      customCategories?: Array<{ nom: string; emoji: string; budget_mensuel: number }>;
     };
-    const { message, history = [], profile = "freelance", persoSetup, freelanceSetup, confirmed_transaction, confirmed_modification, confirmed_deletion } = body;
+    const { message, history = [], profile = "freelance", persoSetup, freelanceSetup, confirmed_transaction, confirmed_modification, confirmed_deletion, customCategories = [] } = body;
     const userCtx: UserContext = { profile, persoSetup, freelanceSetup };
     const systemPrompt = buildSystemPrompt(profile);
 
@@ -387,7 +398,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const systemBlocks = buildSystemBlocks(systemPrompt, learnedHints);
+    const systemBlocks = buildSystemBlocks(systemPrompt, learnedHints, customCategories);
 
     // --- Flux de chat normal ---
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });

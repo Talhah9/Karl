@@ -1,6 +1,6 @@
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,6 +10,7 @@ import { C } from '@/constants/colors';
 import { getCatEmoji, getCatLabel } from '@/constants/categories';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
+import { useCustomCategories, type CustomCategory } from '@/hooks/useCustomCategories';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Period = '1m' | '3m' | '6m';
@@ -141,6 +142,168 @@ function CatList({
   );
 }
 
+// ─── Create category modal ────────────────────────────────────────────────────
+function CreateCategoryModal({
+  visible,
+  onClose,
+  onCreated,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [nom, setNom] = useState('');
+  const [emoji, setEmoji] = useState('');
+  const [budget, setBudget] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleCreate() {
+    const trimNom = nom.trim();
+    const trimEmoji = emoji.trim() || '📌';
+    const parsedBudget = parseFloat(budget.replace(',', '.'));
+    if (!trimNom || isNaN(parsedBudget) || parsedBudget <= 0 || saving) return;
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return;
+      await supabase.from('categories_personnalisees').insert({
+        user_id: session.user.id,
+        nom: trimNom,
+        emoji: trimEmoji,
+        budget_mensuel: parsedBudget,
+      });
+      setNom('');
+      setEmoji('');
+      setBudget('');
+      onCreated();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const valid = nom.trim().length > 0 && parseFloat(budget.replace(',', '.')) > 0;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
+      <Pressable style={catStyles.overlay} onPress={onClose}>
+        <Pressable style={catStyles.sheet} onPress={() => {}}>
+          <View style={catStyles.handle} />
+          <Text style={catStyles.sheetTitle}>Nouvelle catégorie</Text>
+
+          <View style={catStyles.formRow}>
+            <TextInput
+              style={[catStyles.emojiInput]}
+              value={emoji}
+              onChangeText={setEmoji}
+              placeholder="📌"
+              placeholderTextColor={C.muted}
+              maxLength={2}
+            />
+            <TextInput
+              style={[catStyles.nameInput, { flex: 1 }]}
+              value={nom}
+              onChangeText={setNom}
+              placeholder="Nom de la catégorie"
+              placeholderTextColor={C.muted}
+            />
+          </View>
+
+          <View style={catStyles.budgetRow}>
+            <TextInput
+              style={catStyles.budgetInput}
+              value={budget}
+              onChangeText={setBudget}
+              placeholder="0"
+              placeholderTextColor={C.muted}
+              keyboardType="decimal-pad"
+            />
+            <Text style={catStyles.budgetUnit}>€ / mois</Text>
+          </View>
+
+          <Pressable
+            style={[catStyles.createBtn, { opacity: valid && !saving ? 1 : 0.4 }]}
+            onPress={handleCreate}
+            disabled={!valid || saving}
+          >
+            <Text style={catStyles.createBtnText}>Créer la catégorie</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Custom budget progress bars ──────────────────────────────────────────────
+function CustomBudgetSection({
+  categories,
+  depenses,
+  isPro,
+  onAddPress,
+}: {
+  categories: CustomCategory[];
+  depenses: { categorie: string; total: number }[];
+  isPro: boolean;
+  onAddPress: () => void;
+}) {
+  const depenseMap = new Map(depenses.map((d) => [d.categorie, d.total]));
+
+  return (
+    <View style={catStyles.section}>
+      <Text style={catStyles.sectionTitle}>Catégories perso</Text>
+
+      {categories.length > 0 && (
+        <Card style={{ gap: 0, paddingHorizontal: 0, paddingVertical: 0, overflow: 'hidden' }}>
+          {categories.map((cat, i) => {
+            const spent = depenseMap.get(cat.nom) ?? 0;
+            const pct = cat.budget_mensuel > 0 ? Math.min(spent / cat.budget_mensuel, 1) : 0;
+            const over = cat.budget_mensuel > 0 && spent > cat.budget_mensuel;
+            const barColor = over ? C.warm : pct >= 0.8 ? '#f59e0b' : C.lime;
+            return (
+              <View
+                key={cat.id}
+                style={[catStyles.budgetRow2, i < categories.length - 1 && catStyles.budgetRowBorder]}
+              >
+                <View style={catStyles.budgetRowTop}>
+                  <Text style={catStyles.budgetCatLabel}>
+                    {cat.emoji} {cat.nom}
+                  </Text>
+                  <Text style={[catStyles.budgetAmount, { color: over ? C.warm : C.text }]}>
+                    {spent.toLocaleString('fr-FR')} / {cat.budget_mensuel.toLocaleString('fr-FR')} €
+                  </Text>
+                </View>
+                <View style={catStyles.progressTrack}>
+                  <View
+                    style={[
+                      catStyles.progressBar,
+                      { width: `${Math.round(pct * 100)}%` as any, backgroundColor: barColor },
+                    ]}
+                  />
+                </View>
+              </View>
+            );
+          })}
+        </Card>
+      )}
+
+      <Pressable
+        style={catStyles.addBtn}
+        onPress={() => {
+          if (!isPro) {
+            router.push('/paywall');
+          } else {
+            onAddPress();
+          }
+        }}
+      >
+        <Text style={catStyles.addBtnText}>
+          {isPro ? '+ Créer une catégorie' : '🔒 Créer une catégorie · Pro'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 // ─── Analyse screen ───────────────────────────────────────────────────────────
 function AnalysePerso() {
   const { authReady } = useApp();
@@ -153,6 +316,9 @@ function AnalysePerso() {
   const [depenses, setDepenses] = useState<CatGroup[]>([]);
   const [revenus, setRevenus] = useState<CatGroup[]>([]);
   const [recurrentes, setRecurrentes] = useState<CatGroup[]>([]);
+  const [isPro, setIsPro] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const { categories: customCats, refetch: refetchCustomCats } = useCustomCategories(authReady);
 
   const { start, end, label } = getDateRange(period, monthOffset);
 
@@ -160,13 +326,20 @@ function AnalysePerso() {
     if (!authReady) return;
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from('transactions')
-        .select('type, montant, categorie, exceptionnelle')
-        .gte('date', start)
-        .lte('date', end);
+      const [txResult, creditsResult] = await Promise.all([
+        supabase
+          .from('transactions')
+          .select('type, montant, categorie, exceptionnelle')
+          .gte('date', start)
+          .lte('date', end),
+        supabase
+          .from('credits_utilisateur')
+          .select('abonne')
+          .maybeSingle(),
+      ]);
 
-      const txs = (data ?? []) as { type: string; montant: number; categorie: string; exceptionnelle: boolean }[];
+      const txs = (txResult.data ?? []) as { type: string; montant: number; categorie: string; exceptionnelle: boolean }[];
+      if (creditsResult.data) setIsPro(Boolean((creditsResult.data as any).abonne));
 
       const groupBy = (items: typeof txs): CatGroup[] => {
         const map = new Map<string, number>();
@@ -186,7 +359,7 @@ function AnalysePerso() {
     }
   }, [authReady, start, end]);
 
-  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
+  useFocusEffect(useCallback(() => { fetchData(); refetchCustomCats(); }, [fetchData, refetchCustomCats]));
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const activeGroups = tab === 'sorties' ? depenses : tab === 'entrees' ? revenus : recurrentes;
@@ -289,6 +462,22 @@ function AnalysePerso() {
           />
         </>
       )}
+
+      {/* Custom budget categories (shown on sorties tab, current month only) */}
+      {tab === 'sorties' && period === '1m' && monthOffset === 0 && (
+        <CustomBudgetSection
+          categories={customCats}
+          depenses={depenses}
+          isPro={isPro}
+          onAddPress={() => setShowCreateModal(true)}
+        />
+      )}
+
+      <CreateCategoryModal
+        visible={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={refetchCustomCats}
+      />
     </ScrollView>
   );
 }
@@ -489,5 +678,157 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: C.text,
     flex: 1,
+  },
+});
+
+const catStyles = StyleSheet.create({
+  // Custom budget section
+  section: { gap: 10 },
+  sectionTitle: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 9,
+    color: C.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+    paddingHorizontal: 2,
+  },
+
+  budgetRow2: {
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    gap: 7,
+  },
+  budgetRowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
+  budgetRowTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  budgetCatLabel: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 13,
+    color: C.text,
+  },
+  budgetAmount: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 10,
+    color: C.text,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: C.line,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 2,
+  },
+
+  addBtn: {
+    backgroundColor: C.surf,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  addBtnText: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 13,
+    color: C.muted,
+  },
+
+  // Create modal
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8,6,4,0.75)',
+    justifyContent: 'flex-end',
+    zIndex: 100,
+  },
+  sheet: {
+    backgroundColor: C.surf,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: C.line,
+    padding: 24,
+    gap: 16,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: C.line,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  sheetTitle: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 16,
+    color: C.text,
+    letterSpacing: -0.3,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  emojiInput: {
+    width: 52,
+    height: 52,
+    backgroundColor: C.surf2,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 14,
+    fontFamily: 'Sora_400Regular',
+    fontSize: 22,
+    textAlign: 'center',
+    color: C.text,
+  },
+  nameInput: {
+    height: 52,
+    backgroundColor: C.surf2,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    fontFamily: 'Sora_400Regular',
+    fontSize: 14,
+    color: C.text,
+  },
+  budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.surf2,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 52,
+  },
+  budgetInput: {
+    flex: 1,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 18,
+    color: C.text,
+  },
+  budgetUnit: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 13,
+    color: C.muted,
+  },
+  createBtn: {
+    height: 50,
+    backgroundColor: C.purple,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createBtnText: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+    color: C.dark,
   },
 });
