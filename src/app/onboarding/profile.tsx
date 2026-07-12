@@ -89,7 +89,7 @@ export default function ProfileScreen() {
         <View style={styles.footer}>
           <OnboardingDots total={3} current={0} />
           <Button
-            onPress={() => router.push('/onboarding/welcome')}
+            onPress={() => router.push('/onboarding/how-it-works')}
             disabled={!selected}
             accentColor={selected === 'perso' ? C.purple : C.lime}
           >

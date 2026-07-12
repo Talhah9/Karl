@@ -19,6 +19,7 @@ import { useObjectifEpargne, type ObjectifEpargne } from '@/hooks/useObjectifEpa
 import { useChargesFixes } from '@/hooks/useChargesFixes';
 import { useCategoriesMois } from '@/hooks/useCategoriesMois';
 import { useRecentTransactions } from '@/hooks/useRecentTransactions';
+import { useTransactionsMois } from '@/hooks/useTransactionsMois';
 import { SpendingChart } from '@/components/ui/SpendingChart';
 
 import { Button } from '@/components/ui/Button';
@@ -28,6 +29,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ProgressRing, RingLabel } from '@/components/ui/ProgressRing';
 import { Tag } from '@/components/ui/Tag';
 import { C, getChargeRate } from '@/constants/colors';
+import { supabase } from '@/lib/supabase';
 import { getCatEmoji, getCatLabel } from '@/constants/categories';
 import { useApp } from '@/context/AppContext';
 import { getBudgetCycle } from '@/utils/budgetCycle';
@@ -299,6 +301,125 @@ function TransactionsCard({ txs, accent, loading }: { txs: Transaction[]; accent
   );
 }
 
+// ─── Premium card ────────────────────────────────────────────────────────────
+function PremiumCard() {
+  const [isPro, setIsPro] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const userId = session?.user?.id;
+      if (!userId) { setIsPro(false); return; }
+      const { data } = await supabase
+        .from('credits_utilisateur')
+        .select('abonne')
+        .eq('user_id', userId)
+        .maybeSingle();
+      setIsPro(data ? Boolean((data as any).abonne) : false);
+    });
+  }, []);
+
+  if (isPro === null || isPro === true) return null;
+
+  const PERKS = [
+    { emoji: '💬', label: 'Discussions illimitées avec Karl' },
+    { emoji: '🎁', label: 'Bilan mensuel partageable' },
+    { emoji: '📄', label: 'Export CSV/PDF pour ton comptable ou tes archives' },
+    { emoji: '✨', label: 'Accès prioritaire aux nouvelles fonctionnalités' },
+  ];
+
+  return (
+    <Card style={premStyles.card}>
+      <Text style={premStyles.title}>Débloquez toutes les{'\n'}fonctionnalités premium</Text>
+      <View style={premStyles.perks}>
+        {PERKS.map((p) => (
+          <View key={p.emoji} style={premStyles.perkRow}>
+            <Text style={premStyles.perkEmoji}>{p.emoji}</Text>
+            <Text style={premStyles.perkLabel}>{p.label}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={premStyles.footer}>
+        <Text style={premStyles.price}>6,99 € / mois</Text>
+        <Pressable style={premStyles.btn} onPress={() => router.push('/paywall')}>
+          <Text style={premStyles.btnText}>Découvrir Karl Pro</Text>
+        </Pressable>
+      </View>
+    </Card>
+  );
+}
+
+// ─── Revenues / dépenses du mois ─────────────────────────────────────────────
+function TxMoisSection({
+  title,
+  txs,
+  total,
+  accent,
+  emptyMsg,
+  loading,
+}: {
+  title: string;
+  txs: import('@/hooks/useRecentTransactions').Transaction[];
+  total: number;
+  accent: string;
+  emptyMsg: string;
+  loading: boolean;
+}) {
+  if (loading) return null;
+
+  return (
+    <Card style={{ gap: 0, paddingHorizontal: 0, paddingVertical: 0, overflow: 'hidden' }}>
+      {/* Header */}
+      <View style={txMoisStyles.header}>
+        <View>
+          <Text style={txMoisStyles.mono}>{title}</Text>
+          {total > 0 && (
+            <Text style={[txMoisStyles.total, { color: accent }]}>
+              {total.toLocaleString('fr-FR')} €
+            </Text>
+          )}
+        </View>
+        <Pressable
+          onPress={() => router.push('/(tabs)/add')}
+          style={[txMoisStyles.addBtn, { backgroundColor: accent + '22', borderColor: accent + '55' }]}
+        >
+          <Text style={[txMoisStyles.addBtnText, { color: accent }]}>+</Text>
+        </Pressable>
+      </View>
+
+      {txs.length === 0 ? (
+        <Pressable style={txMoisStyles.emptyRow} onPress={() => router.push('/(tabs)/add')}>
+          <Text style={txMoisStyles.emptyText}>{emptyMsg}</Text>
+        </Pressable>
+      ) : (
+        txs.slice(0, 5).map((tx, i) => (
+          <Pressable
+            key={tx.id}
+            style={[txMoisStyles.row, i < Math.min(txs.length, 5) - 1 && txMoisStyles.rowBorder]}
+            onPress={() => router.push(`/transaction/${tx.id}`)}
+          >
+            <View style={txMoisStyles.rowLeft}>
+              <Text style={txMoisStyles.rowEmoji}>{getCatEmoji(tx.categorie)}</Text>
+              <Text style={txMoisStyles.rowLabel} numberOfLines={1}>
+                {tx.description || getCatLabel(tx.categorie)}
+              </Text>
+            </View>
+            <Text style={[txMoisStyles.rowAmount, { color: accent }]}>
+              {tx.type === 'depense' ? '−' : '+'} {tx.montant.toLocaleString('fr-FR')} €
+            </Text>
+          </Pressable>
+        ))
+      )}
+      {txs.length > 5 && (
+        <Pressable style={txMoisStyles.moreRow} onPress={() => router.push('/transactions')}>
+          <Text style={[txMoisStyles.moreText, { color: accent }]}>
+            Voir les {txs.length - 5} autres →
+          </Text>
+        </Pressable>
+      )}
+    </Card>
+  );
+}
+
 // ─── Freelance Dashboard ──────────────────────────────────────────────────────
 function FreelanceDashboard() {
   const { userName, freelanceSetup, hasData } = useApp();
@@ -325,16 +446,14 @@ function FreelanceDashboard() {
     >
       {/* Header */}
       <View style={styles.header}>
+        <Pressable onPress={() => router.push('/settings')} hitSlop={12}>
+          <KarlMascot size={40} smug />
+        </Pressable>
         <View>
           <Text style={styles.dateText}>Lundi 7 juillet</Text>
           <Text style={styles.greeting}>Salut {userName} 👋</Text>
         </View>
-        <View style={styles.headerRight}>
-          <Pressable onPress={() => router.push('/settings')} hitSlop={10}>
-            <Text style={styles.gearIcon}>⚙</Text>
-          </Pressable>
-          <KarlMascot size={40} smug />
-        </View>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Hero card */}
@@ -429,6 +548,8 @@ function FreelanceDashboard() {
       <Pressable style={styles.exportLink} onPress={() => router.push('/export')}>
         <Text style={styles.exportLinkText}>↗ Exporter mes données (CSV / PDF)</Text>
       </Pressable>
+
+      <PremiumCard />
     </ScrollView>
   );
 }
@@ -442,6 +563,7 @@ function PersoDashboard() {
   const { data: trendData, loading: trendLoading, refresh: refreshTrend } = useTrend30j();
   const { data: cmpData, loading: cmpLoading, refresh: refreshCmp } = useComparaisonMois();
   const { data: txData, loading: txLoading, refresh: refreshTx } = useRecentTransactions(7);
+  const { revenus, depenses, totalRevenus, loading: txMoisLoading, refresh: refreshTxMois } = useTransactionsMois();
 
   useFocusEffect(
     useCallback(() => {
@@ -451,7 +573,8 @@ function PersoDashboard() {
       refreshTrend();
       refreshCmp();
       refreshTx();
-    }, [refreshCharges, refreshGoal, refreshCat, refreshTrend, refreshCmp, refreshTx])
+      refreshTxMois();
+    }, [refreshCharges, refreshGoal, refreshCat, refreshTrend, refreshCmp, refreshTx, refreshTxMois])
   );
 
   const salary = persoSetup.netSalary;
@@ -485,19 +608,17 @@ function PersoDashboard() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <Pressable onPress={() => router.push('/settings')} hitSlop={12}>
+          <KarlMascot size={40} color={C.purple} smug />
+        </Pressable>
+        <View style={{ alignItems: 'center' }}>
           <Text style={styles.dateText}>{formattedDate}</Text>
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <Text style={styles.greeting}>Salut {userName} 👋</Text>
             <Tag variant="purple">Perso</Tag>
           </View>
         </View>
-        <View style={styles.headerRight}>
-          <Pressable onPress={() => router.push('/settings')} hitSlop={10}>
-            <Text style={styles.gearIcon}>⚙</Text>
-          </Pressable>
-          <KarlMascot size={40} color={C.purple} smug />
-        </View>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Hero */}
@@ -539,6 +660,26 @@ function PersoDashboard() {
           </Text>
         </View>
       )}
+
+      {/* Revenus du mois */}
+      <TxMoisSection
+        title="Revenus · ce mois"
+        txs={revenus}
+        total={totalRevenus}
+        accent={C.purple}
+        emptyMsg="Aucun revenu enregistré ce mois-ci. Touche + pour en ajouter."
+        loading={txMoisLoading}
+      />
+
+      {/* Dépenses du mois */}
+      <TxMoisSection
+        title="Dépenses · ce mois"
+        txs={depenses}
+        total={totalDepenses}
+        accent={C.warm}
+        emptyMsg="Aucune dépense enregistrée. Touche + pour en ajouter."
+        loading={txMoisLoading}
+      />
 
       {/* Savings goal */}
       <SavingsGoalCard accent={C.purple} goal={goal} save={saveGoal} loading={goalLoading} />
@@ -636,6 +777,8 @@ function PersoDashboard() {
       >
         <Text style={styles.exportLinkText}>↗ Exporter mes données (CSV / PDF)</Text>
       </Pressable>
+
+      <PremiumCard />
     </ScrollView>
   );
 }
@@ -646,11 +789,14 @@ function FreelanceEmpty() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
+        <Pressable onPress={() => router.push('/settings')} hitSlop={12}>
+          <KarlMascot size={40} smug />
+        </Pressable>
         <View>
           <Text style={styles.dateText}>Bienvenue</Text>
           <Text style={styles.greeting}>Salut {userName} 👋</Text>
         </View>
-        <KarlMascot size={40} />
+        <View style={{ width: 40 }} />
       </View>
 
       <Card style={styles.emptyCard}>
@@ -682,14 +828,17 @@ function PersoEmpty() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
-        <View>
+        <Pressable onPress={() => router.push('/settings')} hitSlop={12}>
+          <KarlMascot size={40} color={C.purple} smug />
+        </Pressable>
+        <View style={{ alignItems: 'center' }}>
           <Text style={styles.dateText}>Bienvenue</Text>
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <Text style={styles.greeting}>Salut {userName} 👋</Text>
             <Tag variant="purple">Perso</Tag>
           </View>
         </View>
-        <KarlMascot size={40} color={C.purple} />
+        <View style={{ width: 40 }} />
       </View>
 
       <Card
@@ -1265,6 +1414,128 @@ const tutStyles = StyleSheet.create({
     fontFamily: 'Sora_400Regular',
     fontSize: 13,
     color: C.muted,
+  },
+});
+
+const premStyles = StyleSheet.create({
+  card: {
+    gap: 14,
+    backgroundColor: 'rgba(196,245,66,0.05)',
+    borderColor: 'rgba(196,245,66,0.20)',
+  },
+  title: {
+    fontFamily: 'Sora_800ExtraBold',
+    fontSize: 16,
+    color: C.text,
+    letterSpacing: -0.5,
+    lineHeight: 22,
+  },
+  perks: { gap: 9 },
+  perkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  perkEmoji: { fontSize: 15, width: 22 },
+  perkLabel: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 13,
+    color: C.text,
+    flex: 1,
+    lineHeight: 18,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(196,245,66,0.18)',
+    paddingTop: 12,
+    marginTop: 2,
+  },
+  price: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 13,
+    color: C.muted,
+  },
+  btn: {
+    backgroundColor: C.lime,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+  },
+  btnText: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 13,
+    color: C.dark,
+  },
+});
+
+const txMoisStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingTop: 13,
+    paddingBottom: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: C.line,
+  },
+  mono: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 9,
+    color: C.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+  },
+  total: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 16,
+    letterSpacing: -0.4,
+    marginTop: 2,
+  },
+  addBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtnText: { fontFamily: 'Sora_700Bold', fontSize: 16 },
+  emptyRow: {
+    paddingHorizontal: 15,
+    paddingVertical: 16,
+  },
+  emptyText: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 12.5,
+    color: C.muted,
+    lineHeight: 18,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+  },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  rowEmoji: { fontSize: 16 },
+  rowLabel: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 12.5,
+    color: C.text,
+    flex: 1,
+  },
+  rowAmount: { fontFamily: 'Sora_700Bold', fontSize: 13 },
+  moreRow: {
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+    borderTopWidth: 1,
+    borderTopColor: C.line,
+  },
+  moreText: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 12,
   },
 });
 
