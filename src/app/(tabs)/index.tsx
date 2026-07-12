@@ -819,8 +819,9 @@ function DashboardTutorial({
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
-  const { profile, onboardingDone, tutorialDone, setTutorialDone } = useApp();
+  const { profile, onboardingDone, tutorialDone, setTutorialDone, isAnonymous, hasSeenAuthPrompt, setHasSeenAuthPrompt } = useApp();
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
   useEffect(() => {
     if (onboardingDone && !tutorialDone) {
@@ -828,9 +829,21 @@ export default function DashboardScreen() {
     }
   }, [onboardingDone, tutorialDone]);
 
+  useEffect(() => {
+    if (onboardingDone && isAnonymous === true && !hasSeenAuthPrompt && !showTutorial) {
+      const timer = setTimeout(() => setShowAuthPrompt(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [onboardingDone, isAnonymous, hasSeenAuthPrompt, showTutorial]);
+
   function handleTutorialDone() {
     setShowTutorial(false);
     setTutorialDone(true);
+  }
+
+  function dismissAuthPrompt() {
+    setShowAuthPrompt(false);
+    setHasSeenAuthPrompt(true);
   }
 
   return (
@@ -841,6 +854,26 @@ export default function DashboardScreen() {
         profile={profile ?? 'freelance'}
         onDone={handleTutorialDone}
       />
+      <Modal visible={showAuthPrompt} transparent animationType="slide" statusBarTranslucent>
+        <Pressable style={styles.authPromptOverlay} onPress={dismissAuthPrompt}>
+          <Pressable style={styles.authPromptCard} onPress={() => {}}>
+            <KarlMascot size={44} color={C.purple} />
+            <Text style={styles.authPromptTitle}>Sauvegarde tes données 💜</Text>
+            <Text style={styles.authPromptSub}>
+              Tu es en mode anonyme. Crée un compte gratuit pour ne jamais perdre tes transactions, charges et objectifs.
+            </Text>
+            <Pressable
+              style={styles.authPromptBtn}
+              onPress={() => { dismissAuthPrompt(); router.push('/auth/save'); }}
+            >
+              <Text style={styles.authPromptBtnText}>Créer un compte gratuit</Text>
+            </Pressable>
+            <Pressable onPress={dismissAuthPrompt} style={{ paddingTop: 4 }}>
+              <Text style={styles.authPromptLater}>Plus tard →</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -855,6 +888,49 @@ const styles = StyleSheet.create({
   gearIcon: { fontFamily: 'Sora_400Regular', fontSize: 20, color: C.muted },
   dateText: { fontFamily: 'Sora_400Regular', fontSize: 12, color: C.muted },
   greeting: { fontFamily: 'Sora_700Bold', fontSize: 19, color: C.text },
+
+  authPromptOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(8,6,4,0.65)',
+    justifyContent: 'flex-end',
+  },
+  authPromptCard: {
+    backgroundColor: C.surf,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderColor: C.line,
+    padding: 28,
+    alignItems: 'center',
+    gap: 14,
+    paddingBottom: 40,
+  },
+  authPromptTitle: {
+    fontFamily: 'Sora_800ExtraBold',
+    fontSize: 18,
+    color: C.text,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  authPromptSub: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 13.5,
+    color: C.muted,
+    lineHeight: 20,
+    textAlign: 'center',
+    maxWidth: 300,
+  },
+  authPromptBtn: {
+    width: '100%',
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: C.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  authPromptBtnText: { fontFamily: 'Sora_700Bold', fontSize: 15, color: C.dark },
+  authPromptLater: { fontFamily: 'Sora_400Regular', fontSize: 13, color: C.muted },
 
   heroCard: { gap: 4 },
   heroLabel: {

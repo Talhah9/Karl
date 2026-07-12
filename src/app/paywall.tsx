@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { KarlMascot } from '@/components/ui/KarlMascot';
 import { Tag } from '@/components/ui/Tag';
 import { C } from '@/constants/colors';
+import { useApp } from '@/context/AppContext';
 
 const FEATURES = [
   { label: 'Coach Karl illimité', free: '5/sem', pro: '∞' },
@@ -18,7 +19,14 @@ const FEATURES = [
 ];
 
 export default function PaywallScreen() {
+  const { isAnonymous } = useApp();
   const [plan, setPlan] = useState<'monthly' | 'yearly'>('yearly');
+
+  useEffect(() => {
+    if (isAnonymous === true) {
+      router.replace('/auth/save?return=paywall');
+    }
+  }, [isAnonymous]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

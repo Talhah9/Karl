@@ -112,7 +112,7 @@ function DeleteAccountModal({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
-  const { profile, persoSetup, reset } = useApp();
+  const { profile, persoSetup, reset, isAnonymous } = useApp();
   const { charges, total: chargesTotal } = useChargesFixes();
   const { goal } = useObjectifEpargne();
   const accent = profile === 'perso' ? C.purple : C.lime;
@@ -140,7 +140,7 @@ export default function SettingsScreen() {
         setIsPro(Boolean(data.abonne));
       }
     });
-  }, []);
+  }, [isAnonymous]); // refresh when anonymous state changes (e.g. after account creation)
 
   function handleLogout() {
     Alert.alert(
@@ -193,20 +193,40 @@ export default function SettingsScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {/* ── COMPTE ── */}
-        <Section title="Compte">
-          <Row
-            label={email ?? 'Compte anonyme'}
-            value={email ? undefined : 'Non lié'}
-            last={false}
-          />
-          <Row label="Se déconnecter" onPress={handleLogout} danger last={false} />
-          <Row
-            label="Supprimer mon compte"
-            onPress={() => setShowDeleteModal(true)}
-            danger
-            last
-          />
-        </Section>
+        {isAnonymous ? (
+          <Section title="Compte">
+            <Row
+              label="Compte non sauvegardé"
+              value="Anonyme"
+              last={false}
+            />
+            <Row
+              label="Créer un compte pour sauvegarder"
+              onPress={() => router.push('/auth/save')}
+              last={false}
+            />
+            <Row
+              label="Déjà un compte ? Se connecter"
+              onPress={() => router.push('/auth/sign-in')}
+              last
+            />
+          </Section>
+        ) : (
+          <Section title="Compte">
+            <Row
+              label={email ?? 'Mon compte'}
+              value={email ? undefined : 'Connecté'}
+              last={false}
+            />
+            <Row label="Se déconnecter" onPress={handleLogout} danger last={false} />
+            <Row
+              label="Supprimer mon compte"
+              onPress={() => setShowDeleteModal(true)}
+              danger
+              last
+            />
+          </Section>
+        )}
 
         {/* ── ABONNEMENT ── */}
         <Section title="Abonnement">
