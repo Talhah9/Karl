@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -96,8 +97,15 @@ function TypingBubble() {
   );
 }
 
+const WELCOME_POINTS = [
+  { emoji: '➕', text: 'Ajouter, modifier ou supprimer des transactions' },
+  { emoji: '💰', text: 'Calculer ton solde disponible en temps réel' },
+  { emoji: '📊', text: 'Analyser tes dépenses et revenus' },
+  { emoji: '💡', text: 'Donner des conseils financiers personnalisés' },
+];
+
 export default function ChatScreen() {
-  const { profile, authReady, persoSetup, freelanceSetup } = useApp();
+  const { profile, authReady, persoSetup, freelanceSetup, hasSeenChatWelcome, setHasSeenChatWelcome } = useApp();
   const accent = profile === 'perso' ? C.purple : C.lime;
   const suggestions = profile === 'perso' ? SUGGESTIONS_PERSO : SUGGESTIONS_FREELANCE;
 
@@ -475,6 +483,42 @@ export default function ChatScreen() {
           <Text style={styles.legal}>Karl peut se tromper · ce n'est pas un conseil réglementé</Text>
         </View>
       </KeyboardAvoidingView>
+
+      {/* First-open welcome modal */}
+      <Modal
+        visible={!hasSeenChatWelcome}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.welcomeOverlay}>
+          <View style={styles.welcomeCard}>
+            <View style={styles.welcomeHeader}>
+              <KarlMascot size={46} color={accent} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.welcomeTitle}>Karl, c'est quoi ?</Text>
+                <Text style={styles.welcomeSub}>Ton assistant financier personnel</Text>
+              </View>
+            </View>
+
+            <View style={styles.welcomePoints}>
+              {WELCOME_POINTS.map((p, i) => (
+                <View key={i} style={styles.welcomePoint}>
+                  <Text style={styles.welcomePointEmoji}>{p.emoji}</Text>
+                  <Text style={styles.welcomePointText}>{p.text}</Text>
+                </View>
+              ))}
+            </View>
+
+            <Pressable
+              style={[styles.welcomeBtn, { backgroundColor: accent }]}
+              onPress={() => setHasSeenChatWelcome(true)}
+            >
+              <Text style={[styles.welcomeBtnText, { color: C.dark }]}>C'est parti →</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -656,5 +700,55 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: C.muted,
     textAlign: 'center',
+  },
+
+  welcomeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8,6,4,0.82)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 100,
+  },
+  welcomeCard: {
+    backgroundColor: C.surf,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    borderRadius: 24,
+    padding: 24,
+    gap: 20,
+    width: '100%',
+  },
+  welcomeHeader: { flexDirection: 'row', gap: 14, alignItems: 'center' },
+  welcomeTitle: {
+    fontFamily: 'Sora_800ExtraBold',
+    fontSize: 18,
+    color: C.text,
+    letterSpacing: -0.4,
+  },
+  welcomeSub: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 12,
+    color: C.muted,
+  },
+  welcomePoints: { gap: 11 },
+  welcomePoint: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  welcomePointEmoji: { fontSize: 18, width: 26, textAlign: 'center' },
+  welcomePointText: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 13,
+    color: C.text,
+    flex: 1,
+    lineHeight: 18,
+  },
+  welcomeBtn: {
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  welcomeBtnText: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
   },
 });

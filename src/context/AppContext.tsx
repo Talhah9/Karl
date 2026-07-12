@@ -29,6 +29,7 @@ interface AppState {
   hasData: boolean;
   tutorialDone: boolean;
   hasSeenAuthPrompt: boolean;
+  hasSeenChatWelcome: boolean;
 }
 
 interface AppContextType extends AppState {
@@ -42,6 +43,7 @@ interface AppContextType extends AppState {
   setHasData: (v: boolean) => void;
   setTutorialDone: (v: boolean) => void;
   setHasSeenAuthPrompt: (v: boolean) => void;
+  setHasSeenChatWelcome: (v: boolean) => void;
   reset: () => void;
 }
 
@@ -68,6 +70,7 @@ const defaultState: AppState = {
   hasData: false,
   tutorialDone: false,
   hasSeenAuthPrompt: false,
+  hasSeenChatWelcome: false,
 };
 
 const AppContext = createContext<AppContextType>({
@@ -82,6 +85,7 @@ const AppContext = createContext<AppContextType>({
   setHasData: () => {},
   setTutorialDone: () => {},
   setHasSeenAuthPrompt: () => {},
+  setHasSeenChatWelcome: () => {},
   reset: () => {},
 });
 
@@ -173,6 +177,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [state, save]
   );
 
+  const setHasSeenChatWelcome = useCallback(
+    (hasSeenChatWelcome: boolean) => save({ ...state, hasSeenChatWelcome }),
+    [state, save]
+  );
+
   const reset = useCallback(() => {
     AsyncStorage.removeItem(STORAGE_KEY);
     setState(defaultState);
@@ -192,6 +201,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setHasData,
         setTutorialDone,
         setHasSeenAuthPrompt,
+        setHasSeenChatWelcome,
         reset,
       }}
     >
