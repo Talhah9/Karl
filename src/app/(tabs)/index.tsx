@@ -21,6 +21,7 @@ import { useChargesFixes } from '@/hooks/useChargesFixes';
 import { useCategoriesMois } from '@/hooks/useCategoriesMois';
 import { useRecentTransactions } from '@/hooks/useRecentTransactions';
 import { useTransactionsMois } from '@/hooks/useTransactionsMois';
+import { useFrequentExpenses, type FrequentExpense } from '@/hooks/useFrequentExpenses';
 import { SpendingChart } from '@/components/ui/SpendingChart';
 
 import { Button } from '@/components/ui/Button';
@@ -240,7 +241,9 @@ function SavingsGoalCard({
 
   if (loading) return null;
 
-  const pct = goal ? Math.min(1, goal.montant_actuel / goal.montant_cible) : 0;
+  const rawPct = goal ? goal.montant_actuel / goal.montant_cible : 0;
+  const pct = Math.min(1, rawPct);
+  const isAchieved = rawPct >= 1;
 
   return (
     <>
@@ -257,14 +260,29 @@ function SavingsGoalCard({
         </View>
 
         {goal ? (
-          <>
-            <ProgressRing progress={pct} size={112} color={accent}>
-              <RingLabel value={`${Math.round(pct * 100)}`} unit="%" color={accent} />
-            </ProgressRing>
-            <Text style={styles.cardSubText}>
-              {goal.montant_actuel.toLocaleString('fr-FR')} € / {goal.montant_cible.toLocaleString('fr-FR')} €
-            </Text>
-          </>
+          isAchieved ? (
+            <View style={goalCelebStyles.wrap}>
+              <KarlMascot size={56} color={accent} smug />
+              <Text style={[styles.cardMono, { color: accent, fontSize: 11, letterSpacing: 0.5 }]}>
+                OBJECTIF ATTEINT 🎉
+              </Text>
+              <Text style={goalCelebStyles.amount}>
+                {goal.montant_actuel.toLocaleString('fr-FR')} € mis de côté
+              </Text>
+              <Text style={styles.cardSubText}>
+                Tu assures ce mois-ci. Continue comme ça !
+              </Text>
+            </View>
+          ) : (
+            <>
+              <ProgressRing progress={pct} size={112} color={accent}>
+                <RingLabel value={`${Math.round(pct * 100)}`} unit="%" color={accent} />
+              </ProgressRing>
+              <Text style={styles.cardSubText}>
+                {goal.montant_actuel.toLocaleString('fr-FR')} € / {goal.montant_cible.toLocaleString('fr-FR')} €
+              </Text>
+            </>
+          )
         ) : (
           <Text style={[styles.cardSubText, { paddingVertical: 16 }]}>
             Fixe un objectif pour voir ta progression ici.
@@ -538,7 +556,7 @@ function FreelanceDashboard() {
         </Pressable>
         <View>
           <Text style={styles.dateText}>Lundi 7 juillet</Text>
-          <Text style={styles.greeting}>Salut {userName} 👋</Text>
+          <Text style={styles.greeting}>{userName ? `Salut ${userName} 👋` : 'Salut 👋'}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -643,7 +661,7 @@ function FreelanceDashboard() {
 
 // ─── Perso Dashboard ──────────────────────────────────────────────────────────
 function PersoDashboard() {
-  const { userName, persoSetup, hasData } = useApp();
+  const { userName, persoSetup, hasData, authReady } = useApp();
   const { total: chargesTotal, charges, loading: chargesLoading, refresh: refreshCharges } = useChargesFixes();
   const { goal, loading: goalLoading, save: saveGoal, refresh: refreshGoal } = useObjectifEpargne();
   const { data: catData, totalDepenses, loading: catLoading, refresh: refreshCat } = useCategoriesMois();
@@ -651,7 +669,23 @@ function PersoDashboard() {
   const { data: cmpData, loading: cmpLoading, refresh: refreshCmp } = useComparaisonMois();
   const { data: txData, loading: txLoading, refresh: refreshTx } = useRecentTransactions(7);
   const { revenus, depenses, totalRevenus, loading: txMoisLoading, refresh: refreshTxMois } = useTransactionsMois();
+  const { expenses: frequentExpenses, refresh: refreshFrequent } = useFrequentExpenses(authReady);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [activeDays, setActiveDays] = useState(0);
+  const [quickConfirm, setQuickConfirm] = useState<FrequentExpense | null>(null);
+  const [quickSaving, setQuickSaving] = useState(false);
+
+  const refreshActiveDays = useCallback(async () => {
+    if (!authReady) return;
+    const cycle = getBudgetCycle(persoSetup.payday);
+    const { data } = await supabase
+      .from('transactions')
+      .select('date')
+      .gte('date', cycle.cycleStart)
+      .lte('date', new Date().toISOString().split('T')[0]);
+    const distinct = new Set((data ?? []).map((r) => r.date as string));
+    setActiveDays(distinct.size);
+  }, [authReady, persoSetup.payday]);
 
   useFocusEffect(
     useCallback(() => {
@@ -662,7 +696,9 @@ function PersoDashboard() {
       refreshCmp();
       refreshTx();
       refreshTxMois();
-    }, [refreshCharges, refreshGoal, refreshCat, refreshTrend, refreshCmp, refreshTx, refreshTxMois])
+      refreshActiveDays();
+      refreshFrequent();
+    }, [refreshCharges, refreshGoal, refreshCat, refreshTrend, refreshCmp, refreshTx, refreshTxMois, refreshActiveDays, refreshFrequent])
   );
 
   const salary = persoSetup.netSalary;
@@ -678,6 +714,37 @@ function PersoDashboard() {
 
   const cycle = getBudgetCycle(persoSetup.payday);
   const monthLabel = cycle.cycleLabel;
+
+  const nextPaydayDate = new Date(cycle.cycleEnd + 'T12:00:00');
+  nextPaydayDate.setDate(nextPaydayDate.getDate() + 1);
+  const daysUntilPayday = Math.round((nextPaydayDate.getTime() - new Date().getTime()) / 86400000);
+  const nextDateLabel = nextPaydayDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  const primaryCharge = charges[0] ?? null;
+
+  async function handleQuickConfirm() {
+    if (!quickConfirm || quickSaving) return;
+    setQuickSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) return;
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        montant: quickConfirm.montant,
+        categorie: quickConfirm.categorie,
+        type: 'depense',
+        description: null,
+        date: new Date().toISOString().split('T')[0],
+        exceptionnelle: false,
+      });
+      setQuickConfirm(null);
+      refreshTx();
+      refreshTxMois();
+      refreshCat();
+    } finally {
+      setQuickSaving(false);
+    }
+  }
 
   const dateLabel = new Date().toLocaleDateString('fr-FR', {
     weekday: 'long',
@@ -702,9 +769,14 @@ function PersoDashboard() {
         <View style={{ alignItems: 'center' }}>
           <Text style={styles.dateText}>{formattedDate}</Text>
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            <Text style={styles.greeting}>Salut {userName} 👋</Text>
+            <Text style={styles.greeting}>{userName ? `Salut ${userName} 👋` : 'Salut 👋'}</Text>
             <Tag variant="purple">Perso</Tag>
           </View>
+          {activeDays > 0 && (
+            <Text style={styles.activeDaysChip}>
+              🔥 {activeDays} jour{activeDays > 1 ? 's' : ''} actif{activeDays > 1 ? 's' : ''} ce mois
+            </Text>
+          )}
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -805,6 +877,21 @@ function PersoDashboard() {
       {/* Savings goal */}
       <SavingsGoalCard accent={C.purple} goal={goal} save={saveGoal} loading={goalLoading} />
 
+      {/* Prochaine charge fixe */}
+      {!chargesLoading && primaryCharge && daysUntilPayday > 0 && daysUntilPayday <= 14 && (
+        <View style={[styles.alert, quickAlertStyle]}>
+          <Text style={styles.alertEmoji}>🗓</Text>
+          <Text style={[styles.alertText, { flex: 1 }]}>
+            <Text style={{ fontFamily: 'Sora_700Bold', color: C.text }}>
+              {primaryCharge.nom}
+            </Text>
+            {charges.length > 1 ? ` +${charges.length - 1} autre${charges.length - 1 > 1 ? 's' : ''}` : ''}{' '}
+            dans <Text style={{ fontFamily: 'Sora_700Bold' }}>{daysUntilPayday} jour{daysUntilPayday > 1 ? 's' : ''}</Text>
+            {' '}· {nextDateLabel} · {chargesTotal.toLocaleString('fr-FR')} €
+          </Text>
+        </View>
+      )}
+
       {/* Prélèvements */}
       <Card style={styles.echeanceCard}>
         <View style={styles.echeanceTop}>
@@ -880,6 +967,26 @@ function PersoDashboard() {
         </Pressable>
       </View>
 
+      {/* Dépenses rapides */}
+      {frequentExpenses.length >= 2 && (
+        <View style={quickStyles.section}>
+          <Text style={styles.cardMono}>Dépenses fréquentes · tap pour ajouter</Text>
+          <View style={quickStyles.row}>
+            {frequentExpenses.map((exp) => (
+              <Pressable
+                key={exp.categorie}
+                style={quickStyles.chip}
+                onPress={() => setQuickConfirm(exp)}
+              >
+                <Text style={quickStyles.chipEmoji}>{exp.emoji}</Text>
+                <Text style={quickStyles.chipLabel}>{exp.label}</Text>
+                <Text style={quickStyles.chipAmount}>~{exp.montant.toLocaleString('fr-FR')} €</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      )}
+
       <Pressable
         style={[styles.askKarl, { borderColor: C.line }]}
         onPress={() => router.push('/(tabs)/chat')}
@@ -887,6 +994,40 @@ function PersoDashboard() {
         <KarlMascot size={30} color={C.purple} />
         <Text style={styles.askKarlText}>Demander à Karl…</Text>
       </Pressable>
+
+      {/* Quick expense confirm modal */}
+      <Modal visible={!!quickConfirm} transparent animationType="slide" statusBarTranslucent>
+        <Pressable style={goalStyles.backdrop} onPress={() => setQuickConfirm(null)} />
+        <View style={goalStyles.sheet}>
+          <Text style={quickStyles.confirmTitle}>Confirmer la dépense</Text>
+          {quickConfirm && (
+            <>
+              <View style={quickStyles.confirmRow}>
+                <Text style={quickStyles.confirmEmoji}>{quickConfirm.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={quickStyles.confirmLabel}>{quickConfirm.label}</Text>
+                  <Text style={quickStyles.confirmAmount}>{quickConfirm.montant.toLocaleString('fr-FR')} €</Text>
+                </View>
+              </View>
+              <Text style={quickStyles.confirmDate}>
+                Aujourd'hui · {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
+              </Text>
+            </>
+          )}
+          <View style={goalStyles.btnRow}>
+            <Pressable style={goalStyles.cancelBtn} onPress={() => setQuickConfirm(null)}>
+              <Text style={goalStyles.cancelText}>Annuler</Text>
+            </Pressable>
+            <Pressable
+              style={[goalStyles.saveBtn, { backgroundColor: C.purple, opacity: quickSaving ? 0.6 : 1 }]}
+              onPress={handleQuickConfirm}
+              disabled={quickSaving}
+            >
+              <Text style={goalStyles.saveText}>{quickSaving ? '…' : 'Confirmer'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Pressable style={styles.bilanBtn} onPress={() => router.push('/bilan')}>
         <Text style={styles.bilanBtnTxt}>🎁  Voir mon bilan du mois</Text>
@@ -915,7 +1056,7 @@ function FreelanceEmpty() {
         </Pressable>
         <View>
           <Text style={styles.dateText}>Bienvenue</Text>
-          <Text style={styles.greeting}>Salut {userName} 👋</Text>
+          <Text style={styles.greeting}>{userName ? `Salut ${userName} 👋` : 'Salut 👋'}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -955,7 +1096,7 @@ function PersoEmpty() {
         <View style={{ alignItems: 'center' }}>
           <Text style={styles.dateText}>Bienvenue</Text>
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            <Text style={styles.greeting}>Salut {userName} 👋</Text>
+            <Text style={styles.greeting}>{userName ? `Salut ${userName} 👋` : 'Salut 👋'}</Text>
             <Tag variant="purple">Perso</Tag>
           </View>
         </View>
@@ -1392,6 +1533,58 @@ const styles = StyleSheet.create({
     color: C.muted,
     textDecorationLine: 'underline',
   },
+  activeDaysChip: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 10.5,
+    color: C.muted,
+    marginTop: 3,
+  },
+});
+
+const quickAlertStyle = {
+  borderColor: 'rgba(167,139,250,0.3)',
+  backgroundColor: 'rgba(167,139,250,0.07)',
+};
+
+const goalCelebStyles = StyleSheet.create({
+  wrap: { alignItems: 'center' as const, gap: 8, paddingVertical: 10 },
+  amount: {
+    fontFamily: 'Sora_800ExtraBold',
+    fontSize: 20,
+    color: C.text,
+    letterSpacing: -0.5,
+    textAlign: 'center' as const,
+  },
+});
+
+const quickStyles = StyleSheet.create({
+  section: { gap: 10 },
+  row: { flexDirection: 'row', gap: 10 },
+  chip: {
+    flex: 1,
+    backgroundColor: C.surf,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    borderRadius: 16,
+    padding: 14,
+    gap: 4,
+    alignItems: 'center' as const,
+  },
+  chipEmoji: { fontSize: 22 },
+  chipLabel: { fontFamily: 'Sora_600SemiBold', fontSize: 12, color: C.text, textAlign: 'center' as const },
+  chipAmount: { fontFamily: 'Sora_400Regular', fontSize: 11, color: C.muted },
+  confirmTitle: {
+    fontFamily: 'Sora_800ExtraBold',
+    fontSize: 17,
+    color: C.text,
+    letterSpacing: -0.4,
+    marginBottom: 8,
+  },
+  confirmRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  confirmEmoji: { fontSize: 32 },
+  confirmLabel: { fontFamily: 'Sora_600SemiBold', fontSize: 15, color: C.text },
+  confirmAmount: { fontFamily: 'Sora_800ExtraBold', fontSize: 22, color: C.purple, letterSpacing: -0.5 },
+  confirmDate: { fontFamily: 'Sora_400Regular', fontSize: 12, color: C.muted, marginTop: 4 },
 });
 
 const goalStyles = StyleSheet.create({

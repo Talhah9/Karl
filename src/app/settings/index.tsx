@@ -145,7 +145,7 @@ function DeleteAccountModal({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
-  const { profile, persoSetup, reset, isAnonymous } = useApp();
+  const { profile, persoSetup, userName, reset, isAnonymous } = useApp();
   const { charges, total: chargesTotal } = useChargesFixes();
   const { goal } = useObjectifEpargne();
   const accent = profile === 'perso' ? C.purple : C.lime;
@@ -220,21 +220,63 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Nav */}
       <View style={styles.nav}>
+        <View style={{ width: 24 }} />
+        <Text style={styles.navTitle}>Réglages</Text>
         <Pressable onPress={() => router.back()}>
           <Text style={styles.navBack}>✕</Text>
         </Pressable>
-        <Text style={styles.navTitle}>Réglages</Text>
-        <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-        {/* ── 1. MES FINANCES ── */}
+        {/* ── COMPTE ── */}
+        {isAnonymous === true ? (
+          <Section title="Compte">
+            <Row
+              label="Tes données ne sont pas sauvegardées"
+              value="Anonyme"
+              last={false}
+            />
+            <Row
+              label="Créer un compte gratuit"
+              onPress={() => router.push('/auth/save')}
+              last={false}
+            />
+            <Row
+              label="Déjà un compte ? Se connecter"
+              onPress={() => router.push('/auth/sign-in')}
+              last
+            />
+          </Section>
+        ) : isAnonymous === false ? (
+          <Section title="Compte">
+            <Row
+              label={email ?? 'Mon compte'}
+              value={email ? undefined : 'Connecté'}
+              last={false}
+            />
+            <Row label="Se déconnecter" onPress={handleLogout} danger last={false} />
+            <Row
+              label="Supprimer mon compte"
+              onPress={() => setShowDeleteModal(true)}
+              danger
+              last
+            />
+          </Section>
+        ) : null}
+
+        {/* ── MES FINANCES ── */}
         <Section title="Mes finances">
+          <Row
+            label="Prénom / Pseudo"
+            value={userName || 'Non défini'}
+            onPress={() => router.push('/settings/name')}
+            last={false}
+          />
           <Row
             label="Profil"
             value={profile === 'perso' ? 'Salarié / Particulier' : 'Entrepreneur / Freelance'}
-            onPress={() => router.push('/onboarding/profile')}
+            onPress={() => router.push('/onboarding/profile?mode=edit')}
             last={profile !== 'perso'}
           />
           {profile === 'perso' && (
@@ -328,48 +370,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* ── 5. COMPTE ── */}
-        {isAnonymous === null ? (
-          <Section title="Compte">
-            <Row label="Non connecté" last={false} />
-            <Row
-              label="Se connecter"
-              onPress={() => router.push('/auth/sign-in')}
-              last
-            />
-          </Section>
-        ) : isAnonymous === true ? (
-          <Section title="Compte">
-            <Row label="Compte non sauvegardé" value="Anonyme" last={false} />
-            <Row
-              label="Créer un compte pour sauvegarder"
-              onPress={() => router.push('/auth/save')}
-              last={false}
-            />
-            <Row
-              label="Déjà un compte ? Se connecter"
-              onPress={() => router.push('/auth/sign-in')}
-              last
-            />
-          </Section>
-        ) : (
-          <Section title="Compte">
-            <Row
-              label={email ?? 'Mon compte'}
-              value={email ? undefined : 'Connecté'}
-              last={false}
-            />
-            <Row label="Se déconnecter" onPress={handleLogout} danger last={false} />
-            <Row
-              label="Supprimer mon compte"
-              onPress={() => setShowDeleteModal(true)}
-              danger
-              last
-            />
-          </Section>
-        )}
-
-        {/* ── 6. ASSISTANCE ── */}
+        {/* ── ASSISTANCE ── */}
         <Section title="Assistance">
           <Row
             label="Ce que fait Karl"

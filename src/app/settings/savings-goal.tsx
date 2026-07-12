@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -66,9 +66,11 @@ export default function EditSavingsGoalScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.content}>
         <View style={styles.nav}>
-          <Text style={styles.navBack} onPress={() => router.back()}>← Réglages</Text>
+          <View style={{ width: 24 }} />
           <Text style={styles.navTitle}>Objectif d'épargne</Text>
-          <View style={{ width: 80 }} />
+          <Pressable onPress={() => router.back()}>
+            <Text style={styles.navClose}>✕</Text>
+          </Pressable>
         </View>
 
         <ScrollView
@@ -167,8 +169,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   content: { flex: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 22 },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  navBack: { fontFamily: 'Sora_400Regular', fontSize: 13, color: C.muted },
   navTitle: { fontFamily: 'Sora_700Bold', fontSize: 15, color: C.text },
+  navClose: { fontFamily: 'Sora_400Regular', fontSize: 20, color: C.muted },
   scroll: { flex: 1 },
   scrollContent: { gap: 20, paddingBottom: 16 },
   header: { gap: 8 },

@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +30,8 @@ const options: Array<{
 
 export default function ProfileScreen() {
   const { setProfile, profile } = useApp();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const isEdit = mode === 'edit';
   const [selected, setSelected] = useState<UserProfile>(profile ?? null);
 
   function handleSelect(id: UserProfile) {
@@ -48,6 +50,15 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
+        {isEdit && (
+          <View style={styles.nav}>
+            <View style={{ width: 24 }} />
+            <Text style={styles.navTitle}>Mon profil</Text>
+            <Pressable onPress={() => router.back()}>
+              <Text style={styles.navClose}>✕</Text>
+            </Pressable>
+          </View>
+        )}
         <ScrollView
           style={styles.scroll}
           showsVerticalScrollIndicator={false}
@@ -95,11 +106,11 @@ export default function ProfileScreen() {
 
         <View style={styles.footer}>
           <Button
-            onPress={handleContinue}
+            onPress={isEdit ? () => router.back() : handleContinue}
             disabled={!selected}
             accentColor={selected === 'perso' ? C.purple : C.lime}
           >
-            Continuer
+            {isEdit ? 'Enregistrer' : 'Continuer'}
           </Button>
         </View>
       </View>
@@ -109,6 +120,14 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
+  nav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+  },
+  navTitle: { fontFamily: 'Sora_700Bold', fontSize: 15, color: C.text },
+  navClose: { fontFamily: 'Sora_400Regular', fontSize: 20, color: C.muted },
   content: {
     flex: 1,
     paddingHorizontal: 20,

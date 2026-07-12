@@ -46,7 +46,7 @@ export default function SavingsReasonsScreen() {
       // Non-blocking — onboarding continues regardless
     }
     setSaving(false);
-    router.push('/onboarding/profile');
+    router.push('/onboarding/name');
   }
 
   return (

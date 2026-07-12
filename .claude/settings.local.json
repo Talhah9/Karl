@@ -39,7 +39,10 @@
       "Bash(node_modules/@supabase/auth-js/dist/main/GoTrueClient.js)",
       "Bash(grep -v \"^$\")",
       "Bash(git commit *)",
-      "Bash(Remove-Item *)"
+      "Bash(Remove-Item *)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":8081\")",
+      "Bash(git tag *)"
     ]
   }
 }

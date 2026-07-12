@@ -64,7 +64,7 @@ const defaultPersoSetup: PersoSetup = {
 const defaultState: AppState = {
   onboardingDone: false,
   profile: null,
-  userName: 'Léa',
+  userName: '',
   freelanceSetup: defaultFreelanceSetup,
   persoSetup: defaultPersoSetup,
   hasData: false,

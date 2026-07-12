@@ -88,9 +88,11 @@ export default function EditChargesScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.content}>
         <View style={styles.nav}>
-          <Text style={styles.navBack} onPress={() => router.back()}>← Réglages</Text>
+          <View style={{ width: 24 }} />
           <Text style={styles.navTitle}>Charges fixes</Text>
-          <View style={{ width: 80 }} />
+          <Pressable onPress={() => router.back()}>
+            <Text style={styles.navClose}>✕</Text>
+          </Pressable>
         </View>
 
         <ScrollView
@@ -183,8 +185,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   content: { flex: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 22 },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  navBack: { fontFamily: 'Sora_400Regular', fontSize: 13, color: C.muted },
   navTitle: { fontFamily: 'Sora_700Bold', fontSize: 15, color: C.text },
+  navClose: { fontFamily: 'Sora_400Regular', fontSize: 20, color: C.muted },
   scroll: { flex: 1 },
   scrollContent: { gap: 18, paddingBottom: 16 },
   header: { gap: 8 },

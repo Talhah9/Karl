@@ -80,11 +80,11 @@ export default function KarlFeaturesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.nav}>
+        <View style={{ width: 24 }} />
+        <Text style={styles.navTitle}>Ce que fait Karl</Text>
         <Pressable onPress={() => router.back()}>
           <Text style={styles.navBack}>✕</Text>
         </Pressable>
-        <Text style={styles.navTitle}>Ce que fait Karl</Text>
-        <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
