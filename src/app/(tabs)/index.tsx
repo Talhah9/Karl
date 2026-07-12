@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -133,6 +134,92 @@ function ObjectifModal({
           </View>
         </View>
       </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ─── Balance decomposition modal ──────────────────────────────────────────────
+function BalanceModal({
+  visible,
+  onClose,
+  salary,
+  totalRevenus,
+  chargesTotal,
+  savingsGoal,
+  totalDepenses,
+  available,
+  accent,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  salary: number;
+  totalRevenus: number;
+  chargesTotal: number;
+  savingsGoal: number;
+  totalDepenses: number;
+  available: number;
+  accent: string;
+}) {
+  function Line({
+    label,
+    value,
+    sign,
+    bold,
+    color,
+  }: {
+    label: string;
+    value: number;
+    sign?: '+' | '−' | '=';
+    bold?: boolean;
+    color?: string;
+  }) {
+    return (
+      <View style={balStyles.line}>
+        <View style={balStyles.lineLeft}>
+          {sign ? <Text style={[balStyles.sign, { color: color ?? C.muted }]}>{sign}</Text> : <View style={{ width: 16 }} />}
+          <Text style={[balStyles.lineLabel, bold && { fontFamily: 'Sora_700Bold', color: C.text }]}>
+            {label}
+          </Text>
+        </View>
+        <Text style={[balStyles.lineValue, bold && { fontFamily: 'Sora_700Bold' }, color ? { color } : null]}>
+          {value.toLocaleString('fr-FR')} €
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
+      <Pressable style={balStyles.backdrop} onPress={onClose} />
+      <View style={balStyles.sheet}>
+        <View style={balStyles.handle} />
+        <Text style={balStyles.title}>Décomposition du solde</Text>
+
+        <View style={balStyles.lines}>
+          <Line label="Salaire net" value={salary} sign="+" color={accent} />
+          {totalRevenus > 0 && (
+            <Line label="Revenus additionnels" value={totalRevenus} sign="+" color={accent} />
+          )}
+          <View style={balStyles.separator} />
+          <Line label="Charges fixes" value={chargesTotal} sign="−" color={C.warm} />
+          {savingsGoal > 0 && (
+            <Line label="Épargne réservée" value={savingsGoal} sign="−" color={C.warm} />
+          )}
+          <Line label="Dépenses du mois" value={totalDepenses} sign="−" color={C.warm} />
+          <View style={balStyles.separator} />
+          <Line
+            label="Reste disponible"
+            value={available}
+            sign="="
+            bold
+            color={available >= 0 ? accent : C.warm}
+          />
+        </View>
+
+        <TouchableOpacity style={[balStyles.closeBtn, { backgroundColor: accent }]} onPress={onClose}>
+          <Text style={balStyles.closeBtnText}>Fermer</Text>
+        </TouchableOpacity>
+      </View>
     </Modal>
   );
 }
@@ -564,6 +651,7 @@ function PersoDashboard() {
   const { data: cmpData, loading: cmpLoading, refresh: refreshCmp } = useComparaisonMois();
   const { data: txData, loading: txLoading, refresh: refreshTx } = useRecentTransactions(7);
   const { revenus, depenses, totalRevenus, loading: txMoisLoading, refresh: refreshTxMois } = useTransactionsMois();
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -621,32 +709,46 @@ function PersoDashboard() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Hero */}
-      <Card variant="hero" style={styles.heroCard}>
-        <Text style={styles.heroLabel}>Il te reste ce mois</Text>
-        <Text style={styles.heroAmount}>
-          {chargesLoading || goalLoading || catLoading ? '— ' : available.toLocaleString('fr-FR')} €
-        </Text>
-        <Text style={styles.heroSub}>après charges, épargne et dépenses</Text>
-        <View style={styles.heroPills}>
-          <View style={styles.heroPill}>
-            <Text style={styles.heroPillText}>
-              Charges{' '}
-              <Text style={{ fontFamily: 'Sora_700Bold' }}>
-                {chargesLoading ? '…' : chargesTotal.toLocaleString('fr-FR')} €
+      {/* Hero — tappable → balance decomposition modal */}
+      <Pressable onPress={() => setShowBalanceModal(true)}>
+        <Card variant="hero" style={styles.heroCard}>
+          <Text style={styles.heroLabel}>Il te reste ce mois</Text>
+          <Text style={styles.heroAmount}>
+            {chargesLoading || goalLoading || catLoading ? '— ' : available.toLocaleString('fr-FR')} €
+          </Text>
+          <Text style={styles.heroSub}>après charges, épargne et dépenses · voir le détail</Text>
+          <View style={styles.heroPills}>
+            <View style={styles.heroPill}>
+              <Text style={styles.heroPillText}>
+                Charges{' '}
+                <Text style={{ fontFamily: 'Sora_700Bold' }}>
+                  {chargesLoading ? '…' : chargesTotal.toLocaleString('fr-FR')} €
+                </Text>
               </Text>
-            </Text>
-          </View>
-          <View style={styles.heroPill}>
-            <Text style={styles.heroPillText}>
-              Épargne{' '}
-              <Text style={{ fontFamily: 'Sora_700Bold' }}>
-                {goalLoading ? '…' : savingsGoal.toLocaleString('fr-FR')} €
+            </View>
+            <View style={styles.heroPill}>
+              <Text style={styles.heroPillText}>
+                Épargne{' '}
+                <Text style={{ fontFamily: 'Sora_700Bold' }}>
+                  {goalLoading ? '…' : savingsGoal.toLocaleString('fr-FR')} €
+                </Text>
               </Text>
-            </Text>
+            </View>
           </View>
-        </View>
-      </Card>
+        </Card>
+      </Pressable>
+
+      <BalanceModal
+        visible={showBalanceModal}
+        onClose={() => setShowBalanceModal(false)}
+        salary={persoSetup.netSalary}
+        totalRevenus={totalRevenus}
+        chargesTotal={chargesTotal}
+        savingsGoal={savingsGoal}
+        totalDepenses={totalDepenses}
+        available={available}
+        accent={C.purple}
+      />
 
       <ComparaisonRow data={cmpData} loading={cmpLoading} />
 
@@ -1536,6 +1638,78 @@ const txMoisStyles = StyleSheet.create({
   moreText: {
     fontFamily: 'Sora_600SemiBold',
     fontSize: 12,
+  },
+});
+
+const balStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(8,6,4,0.55)',
+  },
+  sheet: {
+    backgroundColor: C.surf,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderColor: C.line,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 20,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: C.line,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  title: {
+    fontFamily: 'Sora_800ExtraBold',
+    fontSize: 17,
+    color: C.text,
+    letterSpacing: -0.4,
+  },
+  lines: { gap: 10 },
+  line: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  lineLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  sign: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 14,
+    width: 16,
+    textAlign: 'center',
+  },
+  lineLabel: {
+    fontFamily: 'Sora_400Regular',
+    fontSize: 13.5,
+    color: C.muted,
+    flex: 1,
+  },
+  lineValue: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 13.5,
+    color: C.text,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: C.line,
+    marginVertical: 2,
+  },
+  closeBtn: {
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  closeBtnText: {
+    fontFamily: 'Sora_700Bold',
+    fontSize: 15,
+    color: C.dark,
   },
 });
 
