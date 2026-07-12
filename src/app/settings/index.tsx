@@ -372,6 +372,11 @@ export default function SettingsScreen() {
         {/* ── 6. ASSISTANCE ── */}
         <Section title="Assistance">
           <Row
+            label="Ce que fait Karl"
+            onPress={() => router.push('/settings/karl-features')}
+            last={false}
+          />
+          <Row
             label="Mentions légales & CGU"
             onPress={() =>
               Alert.alert(
