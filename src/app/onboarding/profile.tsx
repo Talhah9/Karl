@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { KarlMascot } from '@/components/ui/KarlMascot';
-import { OnboardingDots } from '@/components/ui/OnboardingDots';
 import { C } from '@/constants/colors';
 import { useApp, type UserProfile } from '@/context/AppContext';
 
@@ -36,6 +35,14 @@ export default function ProfileScreen() {
   function handleSelect(id: UserProfile) {
     setSelected(id);
     setProfile(id!);
+  }
+
+  function handleContinue() {
+    if (selected === 'perso') {
+      router.push('/onboarding/perso/salary');
+    } else {
+      router.push('/onboarding/freelance/status');
+    }
   }
 
   return (
@@ -87,9 +94,8 @@ export default function ProfileScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
-          <OnboardingDots total={3} current={0} />
           <Button
-            onPress={() => router.push('/onboarding/how-it-works')}
+            onPress={handleContinue}
             disabled={!selected}
             accentColor={selected === 'perso' ? C.purple : C.lime}
           >
