@@ -28,10 +28,12 @@ interface AppState {
   persoSetup: PersoSetup;
   hasData: boolean;
   tutorialDone: boolean;
+  hasSeenAuthPrompt: boolean;
 }
 
 interface AppContextType extends AppState {
   authReady: boolean;
+  isAnonymous: boolean | null;
   setProfile: (p: UserProfile) => void;
   setUserName: (n: string) => void;
   setFreelanceSetup: (s: Partial<FreelanceSetup>) => void;
@@ -39,6 +41,7 @@ interface AppContextType extends AppState {
   completeOnboarding: () => void;
   setHasData: (v: boolean) => void;
   setTutorialDone: (v: boolean) => void;
+  setHasSeenAuthPrompt: (v: boolean) => void;
   reset: () => void;
 }
 
@@ -64,11 +67,13 @@ const defaultState: AppState = {
   persoSetup: defaultPersoSetup,
   hasData: false,
   tutorialDone: false,
+  hasSeenAuthPrompt: false,
 };
 
 const AppContext = createContext<AppContextType>({
   ...defaultState,
   authReady: false,
+  isAnonymous: null,
   setProfile: () => {},
   setUserName: () => {},
   setFreelanceSetup: () => {},
@@ -76,6 +81,7 @@ const AppContext = createContext<AppContextType>({
   completeOnboarding: () => {},
   setHasData: () => {},
   setTutorialDone: () => {},
+  setHasSeenAuthPrompt: () => {},
   reset: () => {},
 });
 
@@ -84,6 +90,7 @@ const STORAGE_KEY = '@karl_app_state';
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(defaultState);
   const [authReady, setAuthReady] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState<boolean | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
@@ -95,14 +102,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Initialize anonymous Supabase auth so Edge Functions can be called with a JWT
+  // Auth: init anonymous session, listen for state changes
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setIsAnonymous(session.user.is_anonymous ?? false);
+        setAuthReady(true);
+      } else {
+        setIsAnonymous(null);
+      }
+    });
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         await supabase.auth.signInAnonymously();
+      } else {
+        setIsAnonymous(session.user.is_anonymous ?? false);
+        setAuthReady(true);
       }
-      setAuthReady(true);
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const save = useCallback((next: AppState) => {
@@ -147,6 +167,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [state, save]
   );
 
+  const setHasSeenAuthPrompt = useCallback(
+    (hasSeenAuthPrompt: boolean) => save({ ...state, hasSeenAuthPrompt }),
+    [state, save]
+  );
+
   const reset = useCallback(() => {
     AsyncStorage.removeItem(STORAGE_KEY);
     setState(defaultState);
@@ -157,6 +182,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       value={{
         ...state,
         authReady,
+        isAnonymous,
         setProfile,
         setUserName,
         setFreelanceSetup,
@@ -164,6 +190,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         completeOnboarding,
         setHasData,
         setTutorialDone,
+        setHasSeenAuthPrompt,
         reset,
       }}
     >
